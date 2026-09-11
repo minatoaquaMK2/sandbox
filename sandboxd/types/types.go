@@ -112,7 +112,10 @@ func (k PoolKey) Defaulted() PoolKey {
 
 // Hash is a stable 128-bit digest for naming; a shorter tag would be brute-forceable.
 func (k PoolKey) Hash() string {
-	sum := sha256.Sum256([]byte(k.Template + "|" + string(k.Net) + "|" + string(k.Size)))
+	// Engine stopped being configurable in v0.1.8, but its default "ch"
+	// discriminator is part of persisted golden and promoted-template IDs.
+	// Retain it so an upgrade does not orphan snapshots created before v0.1.8.
+	sum := sha256.Sum256([]byte(k.Template + "|" + string(k.Net) + "|" + string(k.Size) + "|ch"))
 	return hex.EncodeToString(sum[:16])
 }
 

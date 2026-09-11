@@ -29,3 +29,11 @@ func TestXLargeSpec(t *testing.T) {
 		t.Errorf("got %+v ok=%v, want {4 8G} true", spec, ok)
 	}
 }
+
+func TestPoolKeyHashPreservesCloudHypervisorDiscriminator(t *testing.T) {
+	key := PoolKey{Template: "aiops-agent-private-v2", Net: NetNone, Size: SizeXLarge}
+	const want = "d2e47ddd697f726119d1d16849c27566"
+	if got := key.Hash(); got != want {
+		t.Fatalf("Hash() = %q, want persisted pre-v0.1.8 hash %q", got, want)
+	}
+}
