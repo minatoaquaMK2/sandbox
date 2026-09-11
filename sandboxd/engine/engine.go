@@ -40,7 +40,8 @@ const (
 	formatJSON    = "json"
 	silkdPort     = 2048 // silkd's fixed guest vsock port, the claim-ready anchor
 	egressPort    = 2049 // guest→host egress port; VMM maps it to <vsock_socket>_2049
-	cmdTimeout    = 2 * time.Minute
+	// Match Cocoon's VMMemTransferTimeout so xlarge snapshot/restore operations are not killed early.
+	cmdTimeout    = 10 * time.Minute
 	probeInterval = 20 * time.Millisecond
 	connectMax    = 64   // "OK <port>" handshake reply cap
 	infoMax       = 4096 // info response frame cap
