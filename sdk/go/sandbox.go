@@ -197,6 +197,22 @@ func (s *Sandbox) Hibernate(ctx context.Context) error {
 	return doNoContent(ctx, s.c, http.MethodPost, s.owner, "/v1/sandboxes/"+s.ID+"/hibernate", nil, s.token, "hibernate")
 }
 
+// Renew extends the sandbox lease from now and returns its durable deadline.
+// A zero ttl asks the server to use its default; the server clamps oversized
+// leases to its configured maximum.
+func (s *Sandbox) Renew(ctx context.Context, ttl time.Duration) (time.Time, error) {
+	body, err := encodeBody("renew", renewRequest{TTLSeconds: ttlSeconds(ttl)})
+	if err != nil {
+		return time.Time{}, err
+	}
+	resp, err := doJSON[renewResponse](ctx, s.c, http.MethodPost, s.owner, "/v1/sandboxes/"+s.ID+"/renew", bytes.NewReader(body), s.token, "renew")
+	if err != nil {
+		return time.Time{}, err
+	}
+	s.Deadline = resp.Deadline
+	return resp.Deadline, nil
+}
+
 // Close releases the sandbox on its node; releasing one already gone is not
 // an error. It takes no ctx so it stays defer-friendly — bounded internally.
 func (s *Sandbox) Close() error {

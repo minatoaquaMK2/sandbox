@@ -188,6 +188,47 @@ func TestReleaseValidatesToken(t *testing.T) {
 	}
 }
 
+func TestRenewPersistsClampedDeadline(t *testing.T) {
+	m := newTestManager(t, newFakeEngine())
+	sb := mustClaim(t, m, testKey)
+	before := time.Now()
+
+	if _, err := m.Renew(t.Context(), sb.ID, Cred{Token: "wrong"}, time.Hour); !errors.Is(err, ErrUnknownSandbox) {
+		t.Fatalf("wrong-token Renew: %v, want ErrUnknownSandbox", err)
+	}
+	deadline, err := m.Renew(t.Context(), sb.ID, Cred{Token: sb.Token}, 48*time.Hour)
+	if err != nil {
+		t.Fatalf("Renew: %v", err)
+	}
+	if want := before.Add(maxTTL); deadline.Before(want) || deadline.After(time.Now().Add(maxTTL)) {
+		t.Fatalf("deadline %v, want approximately now+%v", deadline, maxTTL)
+	}
+	claims, err := newClaimStore(m.dataDir).load()
+	if err != nil {
+		t.Fatalf("load claims: %v", err)
+	}
+	if got := claims[sb.ID].Deadline; !got.Equal(deadline) {
+		t.Fatalf("persisted deadline %v, want %v", got, deadline)
+	}
+}
+
+func TestRenewRollsBackOnPersistFailure(t *testing.T) {
+	m := newTestManager(t, newFakeEngine())
+	sb := mustClaim(t, m, testKey)
+	previous := sb.Deadline
+	m.store = newClaimStore(filepath.Join(t.TempDir(), "missing"))
+
+	if _, err := m.Renew(t.Context(), sb.ID, Cred{Operator: true}, time.Hour); err == nil {
+		t.Fatal("Renew succeeded with an unwritable claim store")
+	}
+	m.mu.Lock()
+	got := m.claimed[sb.ID].Deadline
+	m.mu.Unlock()
+	if !got.Equal(previous) {
+		t.Fatalf("deadline %v after failed persist, want rollback to %v", got, previous)
+	}
+}
+
 func TestReleaseAfterResolveTearsDownOnce(t *testing.T) {
 	eng := newFakeEngine()
 	m := newTestManager(t, eng)

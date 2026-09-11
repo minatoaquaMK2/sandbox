@@ -14,11 +14,11 @@ const journalMaxBytes = 64 * 1024 * 1024
 // usageEvent is one line of usage.jsonl, the billing stream the platform collector folds.
 type usageEvent struct {
 	Time      time.Time `json:"t"`
-	Event     string    `json:"ev"` // claim|hibernate|wake|fork|promote|checkpoint|release|reap
+	Event     string    `json:"ev"` // claim|renew|hibernate|wake|fork|promote|checkpoint|release|reap
 	ID        string    `json:"id"`
 	VMName    string    `json:"vm,omitempty"`
 	KeyHash   string    `json:"key,omitempty"`        // claim only
-	Tenant    string    `json:"tenant,omitempty"`     // claim only
+	Tenant    string    `json:"tenant,omitempty"`     // claim/renew
 	Volumes   []string  `json:"volumes,omitempty"`    // claim only
 	VolumesRW []string  `json:"volumes_rw,omitempty"` // claim only: the write-enabled subset
 	Children  []string  `json:"children,omitempty"`   // fork only

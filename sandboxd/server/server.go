@@ -64,6 +64,7 @@ type Manager interface {
 	ClaimProvision(ctx context.Context, key types.PoolKey, ttl time.Duration, tenant, claimRef string, volumes []types.Volume) (*types.Sandbox, error)
 	ClaimProvisionPromoted(ctx context.Context, key types.PoolKey, ttl time.Duration, tenant, claimRef string, volumes []types.Volume) (*types.Sandbox, error)
 	Release(ctx context.Context, id string, cred pool.Cred) error
+	Renew(ctx context.Context, id string, cred pool.Cred, ttl time.Duration) (time.Time, error)
 	Hibernate(ctx context.Context, id string, cred pool.Cred) error
 	Wake(ctx context.Context, id string, cred pool.Cred) error
 	Fork(ctx context.Context, id string, cred pool.Cred, count int, ttl time.Duration) ([]*types.Sandbox, error)
@@ -178,6 +179,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/claim", s.requireToken(s.handleClaim))
 	mux.HandleFunc("GET /v1/volumes", s.requireToken(s.handleVolumes))
 	mux.HandleFunc("POST /v1/sandboxes/{id}/release", s.handleSandboxVerb("release", s.mgr.Release))
+	mux.HandleFunc("POST /v1/sandboxes/{id}/renew", s.handleRenew)
 	mux.HandleFunc("POST /v1/sandboxes/{id}/hibernate", s.handleSandboxVerb("hibernate", s.mgr.Hibernate))
 	mux.HandleFunc("POST /v1/sandboxes/{id}/wake", s.handleSandboxVerb("wake", s.mgr.Wake))
 	mux.HandleFunc("GET /v1/sandboxes/{id}", s.requireRoot(s.handleSandbox))
@@ -356,6 +358,24 @@ func (s *Server) redirectClaim(ctx context.Context, w http.ResponseWriter, req t
 	// TemplateOwners is in-memory; HasGolden can be a store round-trip.
 	owners := s.templateOwners(s.placer.TemplateOwners, hash, tenant)
 	return len(owners) > 0 && !s.mgr.HasGolden(ctx, key, tenant) && writeRedirect(w, owners)
+}
+
+// handleRenew durably extends a claim. Authorization mirrors release: the
+// sandbox token renews its own claim and the root token may renew by id.
+func (s *Server) handleRenew(w http.ResponseWriter, r *http.Request) {
+	token, ok := sandboxToken(w, r)
+	if !ok {
+		return
+	}
+	req, ok := decodeBody[types.RenewRequest](w, r)
+	if !ok {
+		return
+	}
+	id := r.PathValue("id")
+	deadline, err := s.mgr.Renew(r.Context(), id, s.sandboxCred(token), req.TTL())
+	writeResult(w, r, "renew", id, "renew failed", err, func() {
+		writeJSON(w, http.StatusOK, types.RenewResponse{Deadline: deadline})
+	})
 }
 
 func (s *Server) handleSandbox(w http.ResponseWriter, r *http.Request) {

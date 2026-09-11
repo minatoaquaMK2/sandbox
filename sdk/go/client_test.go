@@ -121,6 +121,36 @@ func TestCloseReleases(t *testing.T) {
 	}
 }
 
+func TestRenewExtendsLease(t *testing.T) {
+	wantDeadline := time.Unix(1729, 0).UTC()
+	var gotBody renewRequest
+	var gotAuth string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/sandboxes/sb_9/renew" {
+			t.Errorf("got %s %s", r.Method, r.URL.Path)
+		}
+		gotAuth = r.Header.Get("Authorization")
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			t.Errorf("decode body: %v", err)
+		}
+		_ = json.NewEncoder(w).Encode(renewResponse{Deadline: wantDeadline})
+	}))
+	t.Cleanup(ts.Close)
+
+	c := testClient(t, ts)
+	sb := &Sandbox{ID: "sb_9", c: c, token: "tok9", owner: c.addr}
+	deadline, err := sb.Renew(t.Context(), 90*time.Second)
+	if err != nil {
+		t.Fatalf("Renew: %v", err)
+	}
+	if gotBody.TTLSeconds != 90 || gotAuth != "Bearer tok9" {
+		t.Fatalf("body %+v auth %q", gotBody, gotAuth)
+	}
+	if !deadline.Equal(wantDeadline) || !sb.Deadline.Equal(wantDeadline) {
+		t.Fatalf("deadline %v handle %v, want %v", deadline, sb.Deadline, wantDeadline)
+	}
+}
+
 func TestNewFollowsRedirect(t *testing.T) {
 	var nodeB *httptest.Server
 	nodeB = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

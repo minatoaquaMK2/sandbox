@@ -464,6 +464,44 @@ func TestSandboxVerbFlows(t *testing.T) {
 	}
 }
 
+func TestRenewSandboxLease(t *testing.T) {
+	const token = "sandbox-token"
+	wantDeadline := time.Unix(1729, 0).UTC()
+	var gotID, gotToken string
+	var gotTTL time.Duration
+	mgr := &fakeManager{renew: func(id, presented string, ttl time.Duration) (time.Time, error) {
+		gotID, gotToken, gotTTL = id, presented, ttl
+		return wantDeadline, nil
+	}}
+	ts := newTestServer(t, "", mgr, nil)
+	body := bytes.NewBufferString(`{"ttl_seconds":21600}`)
+	req, err := http.NewRequestWithContext(
+		t.Context(), http.MethodPost, ts.URL+"/v1/sandboxes/sb_1/renew", body,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status %d, want 200", resp.StatusCode)
+	}
+	var result types.RenewResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	if gotID != "sb_1" || gotToken != token || gotTTL != 6*time.Hour {
+		t.Fatalf("renew got id=%q token=%q ttl=%v", gotID, gotToken, gotTTL)
+	}
+	if !result.Deadline.Equal(wantDeadline) {
+		t.Fatalf("deadline %v, want %v", result.Deadline, wantDeadline)
+	}
+}
+
 func TestReleaseOperatorToken(t *testing.T) {
 	const rootTok, sbTok = "sekret", "sb-secret"
 	tenants := []config.TenantSpec{{Name: "acme", Token: "acme-tok"}}
@@ -1877,6 +1915,8 @@ type fakeManager struct {
 	warmClaim            func(ctx context.Context, key types.PoolKey, ttl time.Duration) (*types.Sandbox, error)
 	release              func(id, token string) error
 	releaseOp            func(id string) error
+	renew                func(id, token string, ttl time.Duration) (time.Time, error)
+	renewOp              func(id string, ttl time.Duration) (time.Time, error)
 	socket               func(id, token string) (string, error)
 	hibernate            func(id, token string) error
 	wake                 func(id, token string) error
@@ -1947,6 +1987,19 @@ func (f *fakeManager) Release(_ context.Context, id string, cred pool.Cred) erro
 		return nil
 	}
 	return f.release(id, cred.Token)
+}
+
+func (f *fakeManager) Renew(_ context.Context, id string, cred pool.Cred, ttl time.Duration) (time.Time, error) {
+	if cred.Operator {
+		if f.renewOp == nil {
+			return time.Time{}, pool.ErrUnknownSandbox
+		}
+		return f.renewOp(id, ttl)
+	}
+	if f.renew == nil {
+		return time.Time{}, pool.ErrUnknownSandbox
+	}
+	return f.renew(id, cred.Token, ttl)
 }
 
 func (f *fakeManager) AgentSocket(id, token string) (string, error) {

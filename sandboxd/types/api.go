@@ -53,6 +53,17 @@ type ClaimResponse struct {
 	RequirePromoted bool `json:"require_promoted,omitempty"`
 }
 
+// RenewRequest extends an existing claim from the time the request is
+// accepted. Zero keeps the same semantics as claim: use the server default.
+type RenewRequest struct {
+	TTLField
+}
+
+// RenewResponse returns the durable lease deadline after renewal.
+type RenewResponse struct {
+	Deadline time.Time `json:"deadline"`
+}
+
 // VolumeInfo is the caller-visible, host-path-free catalog projection.
 type VolumeInfo struct {
 	Name         string `json:"name"`

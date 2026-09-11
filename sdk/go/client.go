@@ -483,6 +483,14 @@ type claimResponse struct {
 	RequirePromoted bool      `json:"require_promoted,omitempty"`
 }
 
+type renewRequest struct {
+	TTLSeconds int `json:"ttl_seconds,omitempty"`
+}
+
+type renewResponse struct {
+	Deadline time.Time `json:"deadline"`
+}
+
 type volumeListResponse struct {
 	Volumes []VolumeInfo `json:"volumes"`
 }

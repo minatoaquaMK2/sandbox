@@ -86,6 +86,39 @@ func (m *Manager) Release(ctx context.Context, id string, cred Cred) error {
 	return m.releaseResolved(ctx, id, sb)
 }
 
+// Renew moves a claim's deadline forward from now after authorizing cred. The
+// new deadline is committed before success is reported, so daemon restart
+// cannot silently restore the old lease after a successful response.
+func (m *Manager) Renew(ctx context.Context, id string, cred Cred, ttl time.Duration) (time.Time, error) {
+	ttl = clampTTL(ttl)
+	m.mu.Lock()
+	sb := m.claimed[id]
+	if sb == nil || (!cred.Operator && (cred.Token == "" || subtle.ConstantTimeCompare([]byte(sb.Token), []byte(cred.Token)) != 1)) {
+		m.mu.Unlock()
+		return time.Time{}, ErrUnknownSandbox
+	}
+	previous := sb.Deadline
+	deadline := time.Now().Add(ttl)
+	sb.Deadline = deadline
+	js := m.store.set(sb)
+	m.mu.Unlock()
+
+	if err := m.store.commit(js); err != nil {
+		m.mu.Lock()
+		if m.claimed[id] == sb && sb.Deadline.Equal(deadline) {
+			sb.Deadline = previous
+			rb := m.store.set(sb)
+			m.mu.Unlock()
+			m.recommit(ctx, rb)
+		} else {
+			m.mu.Unlock()
+		}
+		return time.Time{}, fmt.Errorf("renew %s: %w", id, err)
+	}
+	m.recordUsage(ctx, usageEvent{Event: "renew", ID: id, VMName: sb.VMName, Tenant: sb.Tenant})
+	return deadline, nil
+}
+
 // ClaimDeadline authorizes a sandbox by token and returns its lease deadline.
 func (m *Manager) ClaimDeadline(id, token string) (time.Time, error) {
 	m.mu.Lock()
