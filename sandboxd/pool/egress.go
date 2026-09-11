@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"os"
 	"slices"
+	"strings"
 	"syscall"
 	"time"
 
@@ -175,6 +176,17 @@ func (m *Manager) effectivePolicy(sb *types.Sandbox) (egress.Evaluator, bool) {
 	defer m.mu.Unlock()
 	poolPol := m.poolEgress[sb.Key]
 	tenantPol := m.tenantEgress[sb.Tenant]
+	if selectorPol := m.matchingTenantSelectorPolicyLocked(sb); selectorPol != nil {
+		// egress_tenant makes the selector an explicit tenant layer. For a
+		// promoted template it also supplies the otherwise absent pool layer;
+		// for an exact pool the two policies are still intersected below.
+		if poolPol == nil {
+			poolPol = selectorPol
+		}
+		if tenantPol == nil {
+			tenantPol = selectorPol
+		}
+	}
 	if poolPol == nil {
 		if m.pools[sb.Key] != nil || sb.Tenant == "" || tenantPol == nil {
 			return nil, false
@@ -188,6 +200,30 @@ func (m *Manager) effectivePolicy(sb *types.Sandbox) (egress.Evaluator, bool) {
 		return nil, false
 	}
 	return egress.Compose(*poolPol, *tenantPol), true
+}
+
+type poolEgressSelector struct {
+	key    types.PoolKey
+	tenant string
+	policy *egress.Policy
+}
+
+// matchingTenantSelectorPolicyLocked resolves the longest trailing-* selector
+// with the bound tenant and identical VM axes.
+func (m *Manager) matchingTenantSelectorPolicyLocked(sb *types.Sandbox) *egress.Policy {
+	var selected *egress.Policy
+	longest := -1
+	for _, selector := range m.poolEgressSelectors {
+		prefix, wildcard := strings.CutSuffix(selector.key.Template, "*")
+		if !wildcard || prefix == "" || selector.tenant != sb.Tenant ||
+			selector.key.Net != sb.Key.Net || selector.key.Size != sb.Key.Size ||
+			!strings.HasPrefix(sb.Key.Template, prefix) || len(prefix) <= longest {
+			continue
+		}
+		selected = selector.policy
+		longest = len(prefix)
+	}
+	return selected
 }
 
 // newEgressDialer blocks internal targets, then re-admits exactly the node-named prefixes.

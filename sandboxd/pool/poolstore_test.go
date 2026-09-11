@@ -22,7 +22,15 @@ func TestPersistedPoolsSurviveRestart(t *testing.T) {
 	if err := m.SetPools(t.Context(), []config.PoolSpec{{PoolKey: apiKey, Warm: 3}}); err != nil {
 		t.Fatalf("SetPools: %v", err)
 	}
-
+	// SetPools starts a detached golden build. Wait for it before TempDir cleanup
+	// so the test does not race a writer that intentionally outlives its caller.
+	waitFor(t, func() bool {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		p := m.pools[apiKey]
+		return p != nil && !p.building && p.refilling == 0
+	})
+	// Restart on the same data dir, still config-seeded: must rebuild from pools.json.
 	m2 := newTestManagerAt(t, newFakeEngine(), dir, config.PoolSpec{PoolKey: seedKey, Warm: 1})
 	m2.mu.Lock()
 	_, hasSeed := m2.pools[seedKey]

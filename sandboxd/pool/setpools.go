@@ -23,8 +23,9 @@ func (m *Manager) SetPools(ctx context.Context, specs []config.PoolSpec) error {
 		if err := spec.ValidateLimits(); err != nil {
 			return fmt.Errorf("%w: %v", ErrBadCount, err)
 		}
-		// egress is config-owned; accepting it here would silently drop it
-		if spec.Egress != nil {
+		// Egress selectors are config-owned (validated at load); accepting
+		// either field here would silently drop authorization state.
+		if spec.Egress != nil || spec.EgressTenant != "" {
 			return fmt.Errorf("%w: pool %q: egress is set in the config file, not via the API", ErrBadKey, spec.Template)
 		}
 		if existing, ok := hashes[spec.Hash()]; ok && existing != spec.PoolKey {

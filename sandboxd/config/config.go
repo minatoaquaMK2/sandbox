@@ -45,6 +45,11 @@ type PoolSpec struct {
 	// Egress is this pool's allow-list, intersected with the tenant's; nil denies all egress.
 	Egress *egress.Policy `json:"egress,omitempty"`
 
+	// EgressTenant binds a wildcard template selector to one tenant. It is
+	// invalid on concrete pools and prevents a template-name prefix from
+	// becoming an authorization boundary by itself.
+	EgressTenant string `json:"egress_tenant,omitempty"`
+
 	// IdleHibernateSeconds, when >0, hibernates idle claims after that many seconds.
 	IdleHibernateSeconds int `json:"idle_hibernate_seconds,omitempty"`
 
@@ -279,7 +284,12 @@ func (c *Config) applyDefaults() {
 		c.RefillConcurrency = autoRefillConcurrency(runtime.NumCPU())
 	}
 	for i := range c.Pools {
-		c.Pools[i].Warm = cmp.Or(c.Pools[i].Warm, defaultWarm)
+		// A template selector carries policy only; it must never create a
+		// literal wildcard warm pool. validateEgress applies the strict selector
+		// shape after defaults are resolved.
+		if !strings.Contains(c.Pools[i].Template, "*") {
+			c.Pools[i].Warm = cmp.Or(c.Pools[i].Warm, defaultWarm)
+		}
 		c.Pools[i].PoolKey = c.Pools[i].Defaulted()
 	}
 	for i := range c.Volumes {
@@ -400,9 +410,33 @@ func (c *Config) validateMesh() error {
 }
 
 func (c *Config) validateEgress(secrets map[string]struct{}) error {
+	tenantNames := make(map[string]struct{}, len(c.Tenants))
+	for _, tenant := range c.Tenants {
+		tenantNames[tenant.Name] = struct{}{}
+	}
 	for _, p := range c.Pools {
 		if err := p.Validate(); err != nil {
 			return fmt.Errorf("pool %q: %w", p.Template, err)
+		}
+		if strings.Contains(p.Template, "*") {
+			if !strings.HasSuffix(p.Template, "*") || strings.Count(p.Template, "*") != 1 ||
+				strings.TrimSuffix(p.Template, "*") == "" {
+				return fmt.Errorf("pool %q: template selector must be one trailing *", p.Template)
+			}
+			if p.Net != types.NetNone || p.Warm != 0 || p.WarmMax != 0 || p.Egress == nil ||
+				p.EgressTenant == "" {
+				return fmt.Errorf(
+					"pool %q: template selector requires net=none, warm=0, warm_max=0, an egress policy, and egress_tenant", p.Template)
+			}
+			if _, ok := tenantNames[p.EgressTenant]; !ok {
+				return fmt.Errorf("pool %q: template selector references unknown egress_tenant %q", p.Template, p.EgressTenant)
+			}
+			if p.Egress.Intercepts() {
+				return fmt.Errorf("pool %q: template selector does not support intercept", p.Template)
+			}
+		} else if p.EgressTenant != "" {
+			return fmt.Errorf(
+				"pool %q: egress_tenant is only valid on a trailing-* template selector", p.Template)
 		}
 		if p.Net == types.NetEgress && !c.HasEgress() {
 			return fmt.Errorf("pool %q: egress lane needs bridge or network", p.Template)

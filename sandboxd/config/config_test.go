@@ -206,6 +206,49 @@ func TestLoadAcceptsEgressPolicy(t *testing.T) {
 	}
 }
 
+func TestLoadAcceptsTemplateSelectorPolicy(t *testing.T) {
+	path := writeConfig(t, `{"api_token":"root","networks":["cni"],
+		"tenants":[{"name":"aiops-platform-egress","token":"egress"}],
+		"pools":[{"template":"aiops-maker--*","net":"none","size":"xlarge","warm":0,
+		 "egress_tenant":"aiops-platform-egress","egress":{"allow":[{"host":"*"}]}}]}`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := cfg.Pools[0].Warm; got != 0 {
+		t.Fatalf("selector warm = %d, want 0", got)
+	}
+}
+
+func TestLoadRejectsInvalidTemplateSelectorPolicy(t *testing.T) {
+	const binding = `"egress_tenant":"aiops-platform-egress",`
+	for _, tt := range []struct {
+		name, pool string
+	}{
+		{"not trailing", `{"template":"aiops-*-maker","net":"none","size":"xlarge","warm":0,` + binding + `"egress":{"allow":[{"host":"*"}]}}`},
+		{"multiple wildcard", `{"template":"aiops-**","net":"none","size":"xlarge","warm":0,` + binding + `"egress":{"allow":[{"host":"*"}]}}`},
+		{"empty prefix", `{"template":"*","net":"none","size":"xlarge","warm":0,` + binding + `"egress":{"allow":[{"host":"*"}]}}`},
+		{"missing policy", `{"template":"aiops-maker--*","net":"none","size":"xlarge","warm":0,` + binding + `"egress":null}`},
+		{"missing tenant binding", `{"template":"aiops-maker--*","net":"none","size":"xlarge","warm":0,"egress":{"allow":[{"host":"*"}]}}`},
+		{"unknown tenant", `{"template":"aiops-maker--*","net":"none","size":"xlarge","warm":0,"egress_tenant":"other","egress":{"allow":[{"host":"*"}]}}`},
+		{"wrong lane", `{"template":"aiops-maker--*","net":"egress","size":"xlarge","warm":0,` + binding + `"egress":{"allow":[{"host":"*"}]}}`},
+		{"warm pool", `{"template":"aiops-maker--*","net":"none","size":"xlarge","warm":1,` + binding + `"egress":{"allow":[{"host":"*"}]}}`},
+		{"warm max", `{"template":"aiops-maker--*","net":"none","size":"xlarge","warm":0,"warm_max":1,` + binding + `"egress":{"allow":[{"host":"*"}]}}`},
+		{"concrete binding", `{"template":"ordinary:v1","net":"none","size":"xlarge","warm":0,` + binding + `"egress":{"allow":[{"host":"*"}]}}`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			body := `{"api_token":"root","bridges":["br0"],
+				"tenants":[{"name":"aiops-platform-egress","token":"egress"}],
+				"pools":[` + tt.pool + `]}`
+			_, err := Load(writeConfig(t, body))
+			if err == nil || (!strings.Contains(err.Error(), "template selector") &&
+				!strings.Contains(err.Error(), "egress_tenant")) {
+				t.Fatalf("Load error = %v, want selector binding rejection", err)
+			}
+		})
+	}
+}
+
 func TestLoadAcceptsUnguardedCNINetwork(t *testing.T) {
 	path := writeConfig(t, `{"networks":["cni"],"pools":[{"template":"rt:24.04","net":"egress","size":"small"}]}`)
 	if _, err := Load(path); err != nil {

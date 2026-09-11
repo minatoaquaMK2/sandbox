@@ -462,12 +462,19 @@ func TestSetPoolsRejectsInvalidSpec(t *testing.T) {
 
 func TestSetPoolsRejectsEgress(t *testing.T) {
 	m := newTestManager(t, newFakeEngine())
-	err := m.SetPools(t.Context(), []config.PoolSpec{{
-		Template: "rt:24.04", Net: types.NetNone, Size: types.SizeSmall,
-		Egress: &egress.Policy{},
-	}})
-	if !errors.Is(err, ErrBadKey) {
-		t.Fatalf("got %v, want ErrBadKey", err)
+	for _, spec := range []config.PoolSpec{
+		{
+			PoolKey: types.PoolKey{Template: "rt:24.04", Net: types.NetNone, Size: types.SizeSmall},
+			Egress:  &egress.Policy{},
+		},
+		{
+			PoolKey:      types.PoolKey{Template: "rt:24.04", Net: types.NetNone, Size: types.SizeSmall},
+			EgressTenant: "acme",
+		},
+	} {
+		if err := m.SetPools(t.Context(), []config.PoolSpec{spec}); !errors.Is(err, ErrBadKey) {
+			t.Fatalf("got %v, want ErrBadKey", err)
+		}
 	}
 }
 

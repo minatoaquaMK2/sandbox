@@ -267,16 +267,17 @@ type Manager struct {
 	egressTaps map[string]string
 
 	// tenantMax doubles as the set of known tenants; a 0 cap means unlimited.
-	maxClaims    int
-	draining     bool // guarded by m.mu; deliberately not persisted
-	tenantMax    map[string]int
-	tenantLive   map[string]int
-	tenantEgress map[string]*egress.Policy // per-tenant allow-list; nil = no tenant policy
-	poolEgress   map[types.PoolKey]*egress.Policy
-	usage        *journal
-	audit        *journal
-	counters     counters
-	ckpts        store.Store
+	maxClaims           int
+	draining            bool // guarded by m.mu; deliberately not persisted
+	tenantMax           map[string]int
+	tenantLive          map[string]int
+	tenantEgress        map[string]*egress.Policy // per-tenant allow-list; nil = no tenant policy
+	poolEgress          map[types.PoolKey]*egress.Policy
+	poolEgressSelectors []poolEgressSelector
+	usage               *journal
+	audit               *journal
+	counters            counters
+	ckpts               store.Store
 	// a cluster-wide backend makes heal and the delete broadcast no-ops
 	ckptsShared bool
 	healer      *peer.Healer
@@ -426,6 +427,12 @@ func NewManager(ctx context.Context, cfg *config.Config, eng Engine, secrets *eg
 	m.archiveDeleteDefault = time.Duration(cfg.ArchiveDeleteAfterSeconds) * time.Second
 	m.archiveEnabled = m.archiveAfterDefault > 0
 	for _, spec := range cfg.Pools {
+		if spec.EgressTenant != "" {
+			m.poolEgressSelectors = append(m.poolEgressSelectors, poolEgressSelector{
+				key: spec.PoolKey, tenant: spec.EgressTenant, policy: spec.Egress})
+			m.guardedEgress = true
+			continue
+		}
 		p := newPool(spec.PoolKey)
 		p.applySpec(spec)
 		m.pools[spec.PoolKey] = p

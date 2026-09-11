@@ -178,6 +178,116 @@ func TestEffectivePolicyComposition(t *testing.T) {
 	}
 }
 
+func TestMatchingTenantSelectorPolicyUsesConstrainedLongestPrefix(t *testing.T) {
+	m := newTestManager(t, newFakeEngine())
+	broad := &egress.Policy{Allow: []egress.Rule{{Host: "broad.test"}}}
+	narrow := &egress.Policy{Allow: []egress.Rule{{Host: "narrow.test"}}}
+	key := types.PoolKey{
+		Template: "aiops-maker--project--dev:v4",
+		Net:      types.NetNone,
+		Size:     types.SizeXLarge,
+	}
+	m.poolEgressSelectors = []poolEgressSelector{
+		{key: types.PoolKey{Template: "aiops-*", Net: types.NetNone, Size: types.SizeXLarge}, tenant: "egress", policy: broad},
+		{key: types.PoolKey{Template: "aiops-maker--*", Net: types.NetNone, Size: types.SizeXLarge}, tenant: "egress", policy: narrow},
+	}
+	sb := &types.Sandbox{Key: key, Tenant: "egress"}
+	if got := m.matchingTenantSelectorPolicyLocked(sb); got != narrow {
+		t.Fatalf("longest selector policy = %p, want %p", got, narrow)
+	}
+
+	wrongTenant := *sb
+	wrongTenant.Tenant = "ordinary"
+	if got := m.matchingTenantSelectorPolicyLocked(&wrongTenant); got != nil {
+		t.Fatal("template selector crossed its tenant boundary")
+	}
+	for _, other := range []types.PoolKey{
+		{Template: "ordinary:v1", Net: types.NetNone, Size: types.SizeXLarge},
+		{Template: key.Template, Net: types.NetEgress, Size: types.SizeXLarge},
+		{Template: key.Template, Net: types.NetNone, Size: types.SizeLarge},
+	} {
+		candidate := &types.Sandbox{Key: other, Tenant: "egress"}
+		if got := m.matchingTenantSelectorPolicyLocked(candidate); got != nil {
+			t.Errorf("unexpected selector policy for %+v", other)
+		}
+	}
+}
+
+func TestTenantBoundSelectorIsAnExplicitTenantPolicyLayer(t *testing.T) {
+	m := newTestManager(t, newFakeEngine())
+	selectorPolicy := &egress.Policy{Allow: []egress.Rule{{Host: "allowed.test"}}}
+	key := types.PoolKey{
+		Template: "aiops-agent-private-v2",
+		Net:      types.NetNone,
+		Size:     types.SizeXLarge,
+	}
+	m.poolEgressSelectors = []poolEgressSelector{{
+		key: types.PoolKey{
+			Template: "aiops-agent-*",
+			Net:      types.NetNone,
+			Size:     types.SizeXLarge,
+		},
+		tenant: "aiops-platform",
+		policy: selectorPolicy,
+	}}
+	m.tenantEgress = map[string]*egress.Policy{}
+
+	evaluator, ok := m.effectivePolicy(&types.Sandbox{Key: key, Tenant: "aiops-platform"})
+	if !ok {
+		t.Fatal("tenant-bound selector did not arm egress")
+	}
+	if _, decision := evaluator.Eval("allowed.test", "GET"); decision != egress.DecisionAllow {
+		t.Fatal("tenant-bound selector denied its own policy")
+	}
+
+	for _, sb := range []*types.Sandbox{
+		{Key: types.PoolKey{Template: "other:v1", Net: types.NetNone, Size: types.SizeXLarge}, Tenant: "aiops-platform"},
+		{Key: key, Tenant: "other"},
+	} {
+		if _, armed := m.effectivePolicy(sb); armed {
+			t.Fatalf("selector armed an unmatched sandbox: %+v", sb)
+		}
+	}
+
+	poolPolicy := &egress.Policy{Allow: []egress.Rule{
+		{Host: "allowed.test"},
+		{Host: "pool-only.test"},
+	}}
+	m.pools[key] = &pool{key: key}
+	m.poolEgress[key] = poolPolicy
+	evaluator, armed := m.effectivePolicy(&types.Sandbox{Key: key, Tenant: "aiops-platform"})
+	if !armed {
+		t.Fatal("tenant-bound selector did not authorize the exact pool")
+	}
+	if _, decision := evaluator.Eval("allowed.test", "GET"); decision != egress.DecisionAllow {
+		t.Fatal("pool and selector intersection denied their shared destination")
+	}
+	if _, decision := evaluator.Eval("pool-only.test", "GET"); decision != egress.DecisionDeny {
+		t.Fatal("exact pool policy bypassed the selector tenant layer")
+	}
+}
+
+func TestTemplateSelectorIsPolicyOnly(t *testing.T) {
+	key := types.PoolKey{
+		Template: "aiops-maker--*",
+		Net:      types.NetNone,
+		Size:     types.SizeXLarge,
+	}
+	m := egressManager(t, newFakeEngine(), config.PoolSpec{
+		PoolKey: key, EgressTenant: "egress",
+		Egress: &egress.Policy{Allow: []egress.Rule{{Host: "*"}}},
+	})
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.pools[key] != nil {
+		t.Fatal("template selector materialized a pool and may attempt a literal wildcard golden")
+	}
+	if len(m.poolEgressSelectors) != 1 || m.poolEgressSelectors[0].key != key {
+		t.Fatalf("selectors = %#v, want one policy-only selector", m.poolEgressSelectors)
+	}
+}
+
 func TestLockUsesProvisionedTapWithoutList(t *testing.T) {
 	eng := newFakeEngine()
 	eng.tap = "tap-fake0"
