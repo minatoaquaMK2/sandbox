@@ -196,9 +196,8 @@ func TestMatchingTenantSelectorPolicyUsesConstrainedLongestPrefix(t *testing.T) 
 		t.Fatalf("longest selector policy = %p, want %p", got, narrow)
 	}
 
-	wrongTenant := *sb
-	wrongTenant.Tenant = "ordinary"
-	if got := m.matchingTenantSelectorPolicyLocked(&wrongTenant); got != nil {
+	wrongTenant := &types.Sandbox{Key: sb.Key, Tenant: "ordinary"}
+	if got := m.matchingTenantSelectorPolicyLocked(wrongTenant); got != nil {
 		t.Fatal("template selector crossed its tenant boundary")
 	}
 	for _, other := range []types.PoolKey{

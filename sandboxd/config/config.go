@@ -114,6 +114,14 @@ type VolumeSpec struct {
 	Tenants  []string `json:"tenants,omitempty"`
 }
 
+// VolumeDirectorySpec exposes immutable content-addressed images named
+// kb-<16 lowercase hex>.img from one operator-owned directory.
+type VolumeDirectorySpec struct {
+	Path     string   `json:"path"`
+	DirectIO string   `json:"directio,omitempty"`
+	Tenants  []string `json:"tenants,omitempty"`
+}
+
 // MeshConfig configures cluster membership; every node shares one APIToken and tenant set.
 type MeshConfig struct {
 	NodeID     string   `json:"node_id"`               // unique name; defaults to Bind
@@ -224,6 +232,10 @@ type Config struct {
 	// Volumes is the node-local catalog of operator-managed dataset images.
 	Volumes []VolumeSpec `json:"volumes,omitempty"`
 
+	// VolumeDirectory is an optional scalable catalog for immutable
+	// content-addressed Knowledge Base images.
+	VolumeDirectory *VolumeDirectorySpec `json:"volume_directory,omitempty"`
+
 	// RefillConcurrency caps concurrent VM provisioning node-wide; 0 auto-scales with CPUs.
 	RefillConcurrency int `json:"refill_concurrency,omitempty"`
 
@@ -294,6 +306,9 @@ func (c *Config) applyDefaults() {
 	}
 	for i := range c.Volumes {
 		c.Volumes[i].DirectIO = cmp.Or(c.Volumes[i].DirectIO, types.DirectIOOff)
+	}
+	if c.VolumeDirectory != nil {
+		c.VolumeDirectory.DirectIO = cmp.Or(c.VolumeDirectory.DirectIO, types.DirectIOOff)
 	}
 }
 
@@ -394,6 +409,19 @@ func (c *Config) validateVolumes() error {
 			}
 		}
 	}
+	if directory := c.VolumeDirectory; directory != nil {
+		if !filepath.IsAbs(directory.Path) || filepath.Clean(directory.Path) != directory.Path || directory.Path == "/" {
+			return fmt.Errorf("volume_directory path must be a clean absolute non-root path")
+		}
+		if !types.ValidDirectIO(directory.DirectIO) {
+			return fmt.Errorf("volume_directory directio must be on, off, or auto, got %q", directory.DirectIO)
+		}
+		for _, tenant := range directory.Tenants {
+			if _, ok := tenants[tenant]; !ok {
+				return fmt.Errorf("volume_directory references unknown tenant %q", tenant)
+			}
+		}
+	}
 	return nil
 }
 
@@ -418,25 +446,8 @@ func (c *Config) validateEgress(secrets map[string]struct{}) error {
 		if err := p.Validate(); err != nil {
 			return fmt.Errorf("pool %q: %w", p.Template, err)
 		}
-		if strings.Contains(p.Template, "*") {
-			if !strings.HasSuffix(p.Template, "*") || strings.Count(p.Template, "*") != 1 ||
-				strings.TrimSuffix(p.Template, "*") == "" {
-				return fmt.Errorf("pool %q: template selector must be one trailing *", p.Template)
-			}
-			if p.Net != types.NetNone || p.Warm != 0 || p.WarmMax != 0 || p.Egress == nil ||
-				p.EgressTenant == "" {
-				return fmt.Errorf(
-					"pool %q: template selector requires net=none, warm=0, warm_max=0, an egress policy, and egress_tenant", p.Template)
-			}
-			if _, ok := tenantNames[p.EgressTenant]; !ok {
-				return fmt.Errorf("pool %q: template selector references unknown egress_tenant %q", p.Template, p.EgressTenant)
-			}
-			if p.Egress.Intercepts() {
-				return fmt.Errorf("pool %q: template selector does not support intercept", p.Template)
-			}
-		} else if p.EgressTenant != "" {
-			return fmt.Errorf(
-				"pool %q: egress_tenant is only valid on a trailing-* template selector", p.Template)
+		if err := validateEgressSelector(p, tenantNames); err != nil {
+			return err
 		}
 		if p.Net == types.NetEgress && !c.HasEgress() {
 			return fmt.Errorf("pool %q: egress lane needs bridge or network", p.Template)
@@ -458,6 +469,31 @@ func (c *Config) validateEgress(secrets map[string]struct{}) error {
 		if tn.Egress.Intercepts() {
 			return fmt.Errorf("tenant %q egress: intercept may only be set on a pool rule", tn.Name)
 		}
+	}
+	return nil
+}
+
+func validateEgressSelector(p PoolSpec, tenantNames map[string]struct{}) error {
+	hasWildcard := strings.Contains(p.Template, "*")
+	if !hasWildcard && p.EgressTenant == "" {
+		return nil
+	}
+	if !hasWildcard {
+		return fmt.Errorf("pool %q: egress_tenant is only valid on a trailing-* template selector", p.Template)
+	}
+	if !strings.HasSuffix(p.Template, "*") || strings.Count(p.Template, "*") != 1 ||
+		strings.TrimSuffix(p.Template, "*") == "" {
+		return fmt.Errorf("pool %q: template selector must be one trailing *", p.Template)
+	}
+	if p.Net != types.NetNone || p.Warm != 0 || p.WarmMax != 0 || p.Egress == nil || p.EgressTenant == "" {
+		return fmt.Errorf(
+			"pool %q: template selector requires net=none, warm=0, warm_max=0, an egress policy, and egress_tenant", p.Template)
+	}
+	if _, ok := tenantNames[p.EgressTenant]; !ok {
+		return fmt.Errorf("pool %q: template selector references unknown egress_tenant %q", p.Template, p.EgressTenant)
+	}
+	if p.Egress.Intercepts() {
+		return fmt.Errorf("pool %q: template selector does not support intercept", p.Template)
 	}
 	return nil
 }

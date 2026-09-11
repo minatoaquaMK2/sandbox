@@ -79,6 +79,7 @@ var (
 	ErrBadCount          = errors.New("invalid fork count")
 	ErrBadVolume         = errors.New("invalid volume request")
 	ErrVolumeUnavailable = fmt.Errorf("%w: unknown or unavailable volume", ErrBadVolume)
+	ErrVolumeState       = errors.New("sandbox state does not allow volume mutation")
 	ErrNoWarm            = errors.New("no warm sandbox for key")
 	ErrUnknownSandbox    = errors.New("unknown sandbox or bad token")
 	ErrUnknownTemplate   = errors.New("unknown promoted template")
@@ -118,6 +119,9 @@ type Engine interface {
 	MountVolume(ctx context.Context, vsockSocket, name, mount string, rw bool) error
 	UnmountVolume(ctx context.Context, vsockSocket, mount string) error
 	SyncGuest(ctx context.Context, vsockSocket string) error
+	DiskDetach(ctx context.Context, vmName, name string) error
+	AttachVolume(ctx context.Context, vmName, vsockSocket string, spec engine.VolumeSpec, mount string) error
+	DetachVolume(ctx context.Context, vmName, vsockSocket, name, mount string) error
 }
 
 // SandboxSummary is the ops view of one live claim — no tokens.
@@ -235,12 +239,13 @@ type PeerDeleteFunc func(ctx context.Context, id string)
 
 // Manager owns the node's pools, claims, and their persistence.
 type Manager struct {
-	eng     Engine
-	dataDir string
-	egress  bool
-	maxFork int
-	store   *claimStore
-	volumes map[string]catalogVolume
+	eng           Engine
+	dataDir       string
+	egress        bool
+	maxFork       int
+	store         *claimStore
+	volumes       map[string]catalogVolume
+	dynamicVolume *dynamicVolumeCatalog
 	// volumeAdmission counts the live holders of each volume name; guarded by m.mu.
 	volumeAdmission map[string]volumeHolders
 
@@ -376,6 +381,16 @@ func NewManager(ctx context.Context, cfg *config.Config, eng Engine, secrets *eg
 			writable: volume.Writable,
 		}
 	}
+	if directory := cfg.VolumeDirectory; directory != nil {
+		directIO := directory.DirectIO
+		if directIO == "" {
+			directIO = types.DirectIOOff
+		}
+		m.dynamicVolume = &dynamicVolumeCatalog{
+			path: directory.Path, directIO: directIO,
+			tenants: slices.Clone(directory.Tenants),
+		}
+	}
 	if err := os.MkdirAll(m.goldensDir(), 0o750); err != nil {
 		return nil, fmt.Errorf("create goldens dir: %w", err)
 	}
@@ -429,7 +444,8 @@ func NewManager(ctx context.Context, cfg *config.Config, eng Engine, secrets *eg
 	for _, spec := range cfg.Pools {
 		if spec.EgressTenant != "" {
 			m.poolEgressSelectors = append(m.poolEgressSelectors, poolEgressSelector{
-				key: spec.PoolKey, tenant: spec.EgressTenant, policy: spec.Egress})
+				key: spec.PoolKey, tenant: spec.EgressTenant, policy: spec.Egress,
+			})
 			m.guardedEgress = true
 			continue
 		}

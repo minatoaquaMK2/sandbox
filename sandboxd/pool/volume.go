@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -30,6 +31,12 @@ type catalogVolume struct {
 	writable bool
 }
 
+type dynamicVolumeCatalog struct {
+	path     string
+	directIO string
+	tenants  []string
+}
+
 func (v catalogVolume) allowed(tenant string) bool {
 	return tenant == "" || len(v.tenants) == 0 || slices.Contains(v.tenants, tenant)
 }
@@ -53,8 +60,9 @@ type volumeTeardown struct {
 
 // Volumes reports the caller-visible fleet catalog; an empty tenant means root.
 func (m *Manager) Volumes(tenant string, holders map[string]int) []types.VolumeInfo {
-	infos := make([]types.VolumeInfo, 0, len(m.volumes))
-	for name, volume := range m.volumes {
+	catalog := m.volumeCatalog()
+	infos := make([]types.VolumeInfo, 0, len(catalog))
+	for name, volume := range catalog {
 		if !volume.allowed(tenant) {
 			continue
 		}
@@ -64,7 +72,8 @@ func (m *Manager) Volumes(tenant string, holders map[string]int) []types.VolumeI
 			Nodes:        holders[name],
 			Writable:     volume.writable,
 		}
-		if st, err := os.Stat(volume.disk.Path); err == nil {
+		_, static := m.volumes[name]
+		if st, err := safeVolumeFile(volume.disk.Path, !static); err == nil {
 			info.SizeBytes = st.Size()
 			info.Available = true
 			info.Nodes = max(info.Nodes, 1)
@@ -74,7 +83,14 @@ func (m *Manager) Volumes(tenant string, holders map[string]int) []types.VolumeI
 	// root can see peer-only names; a tenant needs local catalog metadata to apply the access list
 	if tenant == "" {
 		for name, nodes := range holders {
-			if _, ok := m.volumes[name]; !ok {
+			if _, ok := catalog[name]; !ok {
+				if m.dynamicVolume != nil && validDynamicVolumeName(name) &&
+					(catalogVolume{tenants: m.dynamicVolume.tenants}).allowed(tenant) {
+					infos = append(infos, types.VolumeInfo{
+						Name: name, DefaultMount: types.DefaultVolumeMount(name), Nodes: nodes,
+					})
+					continue
+				}
 				infos = append(infos, types.VolumeInfo{
 					Name:         name,
 					DefaultMount: types.DefaultVolumeMount(name),
@@ -89,9 +105,12 @@ func (m *Manager) Volumes(tenant string, holders map[string]int) []types.VolumeI
 
 // VolumeNames returns the sorted names this node can currently serve.
 func (m *Manager) VolumeNames() []string {
-	names := make([]string, 0, len(m.volumes))
-	for name, volume := range m.volumes {
-		if _, err := os.Stat(volume.disk.Path); err == nil {
+	catalog := m.volumeCatalog()
+	names := make([]string, 0, len(catalog))
+	for name, volume := range catalog {
+		_, static := m.volumes[name]
+		immutable := !static
+		if _, err := safeVolumeFile(volume.disk.Path, immutable); err == nil {
 			names = append(names, name)
 		}
 	}
@@ -109,8 +128,12 @@ func (m *Manager) VolumePlacement(key types.PoolKey, tenant string, names []stri
 	}
 	local := true
 	for _, name := range names {
-		volume, ok := m.volumes[name]
+		volume, ok, err := m.lookupVolume(name)
 		if !ok {
+			if m.dynamicVolume != nil && validDynamicVolumeName(name) &&
+				!(catalogVolume{tenants: m.dynamicVolume.tenants}).allowed(tenant) {
+				return false, ErrVolumeUnavailable
+			}
 			if tenant == "" {
 				local = false
 				continue
@@ -120,7 +143,7 @@ func (m *Manager) VolumePlacement(key types.PoolKey, tenant string, names []stri
 		if !volume.allowed(tenant) {
 			return false, ErrVolumeUnavailable
 		}
-		if _, err := os.Stat(volume.disk.Path); err != nil {
+		if err != nil {
 			local = false
 		}
 	}
@@ -138,16 +161,16 @@ func (m *Manager) resolveVolumes(ctx context.Context, tenant string, requested [
 	}
 	resolved := make([]resolvedVolume, 0, len(applied))
 	for _, volume := range applied {
-		entry, ok := m.volumes[volume.Name]
+		entry, ok, lookupErr := m.lookupVolume(volume.Name)
 		if !ok || !entry.allowed(tenant) {
 			return nil, ErrVolumeUnavailable
 		}
 		if volume.RW() && !entry.writable {
 			return nil, fmt.Errorf("%w: volume %q is not writable", ErrBadVolume, volume.Name)
 		}
-		if _, statErr := os.Stat(entry.disk.Path); statErr != nil {
+		if lookupErr != nil {
 			// the operator's path stays server-side; the refusal matches the unknown one
-			log.WithFunc("pool.resolveVolumes").Warnf(ctx, "stat volume %q image %s: %v", volume.Name, entry.disk.Path, statErr)
+			log.WithFunc("pool.resolveVolumes").Warnf(ctx, "stat volume %q image %s: %v", volume.Name, entry.disk.Path, lookupErr)
 			return nil, ErrVolumeUnavailable
 		}
 		disk := entry.disk
@@ -156,6 +179,79 @@ func (m *Manager) resolveVolumes(ctx context.Context, tenant string, requested [
 		resolved = append(resolved, resolvedVolume{disk: disk, applied: volume})
 	}
 	return resolved, nil
+}
+
+func (m *Manager) lookupVolume(name string) (catalogVolume, bool, error) {
+	if volume, ok := m.volumes[name]; ok {
+		_, err := safeVolumeFile(volume.disk.Path, false)
+		return volume, true, err
+	}
+	if m.dynamicVolume == nil || !validDynamicVolumeName(name) {
+		return catalogVolume{}, false, nil
+	}
+	path := filepath.Join(m.dynamicVolume.path, name+".img")
+	if filepath.Dir(path) != m.dynamicVolume.path {
+		return catalogVolume{}, false, ErrVolumeUnavailable
+	}
+	volume := catalogVolume{
+		disk: engine.VolumeSpec{
+			Name: name, Path: path, DirectIO: m.dynamicVolume.directIO,
+		},
+		tenants: slices.Clone(m.dynamicVolume.tenants),
+	}
+	_, err := safeVolumeFile(path, true)
+	return volume, true, err
+}
+
+func (m *Manager) volumeCatalog() map[string]catalogVolume {
+	catalog := make(map[string]catalogVolume, len(m.volumes))
+	maps.Copy(catalog, m.volumes)
+	if m.dynamicVolume == nil {
+		return catalog
+	}
+	entries, err := os.ReadDir(m.dynamicVolume.path)
+	if err != nil {
+		return catalog
+	}
+	for _, entry := range entries {
+		name := strings.TrimSuffix(entry.Name(), ".img")
+		if entry.Name() != name+".img" || !validDynamicVolumeName(name) {
+			continue
+		}
+		volume, ok, err := m.lookupVolume(name)
+		if ok && err == nil {
+			if _, exists := catalog[name]; !exists {
+				catalog[name] = volume
+			}
+		}
+	}
+	return catalog
+}
+
+func validDynamicVolumeName(name string) bool {
+	if len(name) != 19 || !strings.HasPrefix(name, "kb-") {
+		return false
+	}
+	for _, char := range name[3:] {
+		if (char < '0' || char > '9') && (char < 'a' || char > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func safeVolumeFile(path string, immutable bool) (os.FileInfo, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("not a regular file")
+	}
+	if immutable && info.Mode().Perm()&0o222 != 0 {
+		return nil, fmt.Errorf("content-addressed volume is writable")
+	}
+	return info, nil
 }
 
 // confirmVolumesClean refuses a read-only claim of a dirty image; run after holds are taken.

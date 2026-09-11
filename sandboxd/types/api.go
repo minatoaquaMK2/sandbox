@@ -80,6 +80,21 @@ type VolumeListResponse struct {
 	Volumes []VolumeInfo `json:"volumes"`
 }
 
+// VolumeAttachRequest adds read-only volumes to an existing running claim.
+type VolumeAttachRequest struct {
+	Volumes []Volume `json:"volumes"`
+}
+
+// VolumeDetachRequest removes named volumes from an existing running claim.
+type VolumeDetachRequest struct {
+	Names []string `json:"names"`
+}
+
+// VolumeMutationResponse reports the complete effective attachment set.
+type VolumeMutationResponse struct {
+	Volumes []Volume `json:"volumes"`
+}
+
 // ForkRequest is the wire body of POST /v1/sandboxes/{id}/fork.
 type ForkRequest struct {
 	Token string `json:"token"`

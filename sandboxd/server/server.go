@@ -41,6 +41,7 @@ var poolErrHTTP = []struct {
 }{
 	{pool.ErrBadKey, http.StatusBadRequest, ""},
 	{pool.ErrBadVolume, http.StatusBadRequest, ""},
+	{pool.ErrVolumeState, http.StatusConflict, ""},
 	{pool.ErrBadName, http.StatusBadRequest, ""},
 	{pool.ErrBadCount, http.StatusBadRequest, ""},
 	{pool.ErrNoEgress, http.StatusConflict, ""},
@@ -65,6 +66,8 @@ type Manager interface {
 	ClaimProvisionPromoted(ctx context.Context, key types.PoolKey, ttl time.Duration, tenant, claimRef string, volumes []types.Volume) (*types.Sandbox, error)
 	Release(ctx context.Context, id string, cred pool.Cred) error
 	Renew(ctx context.Context, id string, cred pool.Cred, ttl time.Duration) (time.Time, error)
+	AttachVolumes(ctx context.Context, id string, cred pool.Cred, volumes []types.Volume) ([]types.Volume, error)
+	DetachVolumes(ctx context.Context, id string, cred pool.Cred, names []string) ([]types.Volume, error)
 	Hibernate(ctx context.Context, id string, cred pool.Cred) error
 	Wake(ctx context.Context, id string, cred pool.Cred) error
 	Fork(ctx context.Context, id string, cred pool.Cred, count int, ttl time.Duration) ([]*types.Sandbox, error)
@@ -180,6 +183,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/volumes", s.requireToken(s.handleVolumes))
 	mux.HandleFunc("POST /v1/sandboxes/{id}/release", s.handleSandboxVerb("release", s.mgr.Release))
 	mux.HandleFunc("POST /v1/sandboxes/{id}/renew", s.handleRenew)
+	mux.HandleFunc("POST /v1/sandboxes/{id}/volumes/attach", s.handleAttachVolumes)
+	mux.HandleFunc("POST /v1/sandboxes/{id}/volumes/detach", s.handleDetachVolumes)
 	mux.HandleFunc("POST /v1/sandboxes/{id}/hibernate", s.handleSandboxVerb("hibernate", s.mgr.Hibernate))
 	mux.HandleFunc("POST /v1/sandboxes/{id}/wake", s.handleSandboxVerb("wake", s.mgr.Wake))
 	mux.HandleFunc("GET /v1/sandboxes/{id}", s.requireRoot(s.handleSandbox))
@@ -375,6 +380,42 @@ func (s *Server) handleRenew(w http.ResponseWriter, r *http.Request) {
 	deadline, err := s.mgr.Renew(r.Context(), id, s.sandboxCred(token), req.TTL())
 	writeResult(w, r, "renew", id, "renew failed", err, func() {
 		writeJSON(w, http.StatusOK, types.RenewResponse{Deadline: deadline})
+	})
+}
+
+func (s *Server) handleAttachVolumes(w http.ResponseWriter, r *http.Request) {
+	token, ok := sandboxToken(w, r)
+	if !ok {
+		return
+	}
+	request, ok := decodeBody[types.VolumeAttachRequest](w, r)
+	if !ok {
+		return
+	}
+	id := r.PathValue("id")
+	volumes, err := s.mgr.AttachVolumes(
+		r.Context(), id, s.sandboxCred(token), request.Volumes,
+	)
+	writeResult(w, r, "volume_attach", id, "volume attach failed", err, func() {
+		writeJSON(w, http.StatusOK, types.VolumeMutationResponse{Volumes: volumes})
+	})
+}
+
+func (s *Server) handleDetachVolumes(w http.ResponseWriter, r *http.Request) {
+	token, ok := sandboxToken(w, r)
+	if !ok {
+		return
+	}
+	request, ok := decodeBody[types.VolumeDetachRequest](w, r)
+	if !ok {
+		return
+	}
+	id := r.PathValue("id")
+	volumes, err := s.mgr.DetachVolumes(
+		r.Context(), id, s.sandboxCred(token), request.Names,
+	)
+	writeResult(w, r, "volume_detach", id, "volume detach failed", err, func() {
+		writeJSON(w, http.StatusOK, types.VolumeMutationResponse{Volumes: volumes})
 	})
 }
 

@@ -88,6 +88,64 @@ func (e *Engine) SyncGuest(ctx context.Context, vsockSocket string) error {
 	return nil
 }
 
+// DiskDetach hot-detaches an operator-owned disk by its serial name.
+func (e *Engine) DiskDetach(ctx context.Context, vmName, name string) error {
+	_, err := e.run(ctx, "vm", "disk", "detach", vmName, argName, name)
+	return err
+}
+
+// AttachVolume converges a disk and its guest mount. It is safe to
+// retry after a daemon crash between the host operation and claim persistence.
+func (e *Engine) AttachVolume(
+	ctx context.Context,
+	vmName, vsockSocket string,
+	spec VolumeSpec,
+	mount string,
+) error {
+	_, found, err := e.findVolumeDevice(ctx, vsockSocket, spec.Name)
+	if err != nil {
+		return err
+	}
+	attached := false
+	if !found {
+		if err := e.DiskAttach(ctx, vmName, spec); err != nil {
+			return err
+		}
+		attached = true
+	}
+	if err := e.silkdExec(ctx, vsockSocket, "mountpoint", "-q", "--", mount); err == nil {
+		return nil
+	}
+	if err := e.MountVolume(ctx, vsockSocket, spec.Name, mount, spec.RW); err != nil {
+		if attached {
+			_ = e.DiskDetach(context.WithoutCancel(ctx), vmName, spec.Name)
+		}
+		return err
+	}
+	return nil
+}
+
+// DetachVolume converges a guest unmount and host hot-unplug. A missing serial
+// means a prior attempt completed the physical operation.
+func (e *Engine) DetachVolume(
+	ctx context.Context,
+	vmName, vsockSocket, name, mount string,
+) error {
+	_, found, err := e.findVolumeDevice(ctx, vsockSocket, name)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return nil
+	}
+	if err := e.silkdExec(ctx, vsockSocket, "mountpoint", "-q", "--", mount); err == nil {
+		if err := e.UnmountVolume(ctx, vsockSocket, mount); err != nil {
+			return err
+		}
+	}
+	return e.DiskDetach(ctx, vmName, name)
+}
+
 func (e *Engine) waitForVolumeDevice(ctx context.Context, vsockSocket, name string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, volumeProbeTimeout)
 	defer cancel()

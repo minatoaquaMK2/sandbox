@@ -505,11 +505,11 @@ func TestSetPoolsRejectsEgress(t *testing.T) {
 	m := newTestManager(t, newFakeEngine())
 	for _, spec := range []config.PoolSpec{
 		{
-			PoolKey: types.PoolKey{Template: "rt:24.04", Net: types.NetNone, Size: types.SizeSmall},
-			Egress:  &egress.Policy{},
+			Template: "rt:24.04", Net: types.NetNone, Size: types.SizeSmall,
+			Egress: &egress.Policy{},
 		},
 		{
-			PoolKey:      types.PoolKey{Template: "rt:24.04", Net: types.NetNone, Size: types.SizeSmall},
+			Template: "rt:24.04", Net: types.NetNone, Size: types.SizeSmall,
 			EgressTenant: "acme",
 		},
 	} {
@@ -849,6 +849,7 @@ type fakeEngine struct {
 	diskAttachCancel                  context.CancelFunc
 	mountVolumeErr                    error
 	unmountVolumeErr                  error
+	diskDetachErr                     error
 	stopped                           map[string]bool
 	creating                          map[string]bool
 	staleOutcome                      engine.StaleCreateOutcome
@@ -1123,6 +1124,35 @@ func (f *fakeEngine) SyncGuest(_ context.Context, vsockSocket string) error {
 	f.syncs = append(f.syncs, vsockSocket)
 	f.volumeOps = append(f.volumeOps, "sync")
 	return nil
+}
+
+func (f *fakeEngine) DiskDetach(_ context.Context, _, name string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.volumeOps = append(f.volumeOps, "detach:"+name)
+	return f.diskDetachErr
+}
+
+func (f *fakeEngine) AttachVolume(
+	ctx context.Context,
+	vmName, vsockSocket string,
+	spec engine.VolumeSpec,
+	mount string,
+) error {
+	if err := f.DiskAttach(ctx, vmName, spec); err != nil {
+		return err
+	}
+	return f.MountVolume(ctx, vsockSocket, spec.Name, mount, spec.RW)
+}
+
+func (f *fakeEngine) DetachVolume(
+	ctx context.Context,
+	vmName, vsockSocket, name, mount string,
+) error {
+	if err := f.UnmountVolume(ctx, vsockSocket, mount); err != nil {
+		return err
+	}
+	return f.DiskDetach(ctx, vmName, name)
 }
 
 func (f *fakeEngine) clone(from, name string) (types.VMRecord, error) {

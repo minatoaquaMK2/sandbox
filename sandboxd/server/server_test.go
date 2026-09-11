@@ -1917,6 +1917,8 @@ type fakeManager struct {
 	releaseOp            func(id string) error
 	renew                func(id, token string, ttl time.Duration) (time.Time, error)
 	renewOp              func(id string, ttl time.Duration) (time.Time, error)
+	attachVolumes        func(id, token string, volumes []types.Volume) ([]types.Volume, error)
+	detachVolumes        func(id, token string, names []string) ([]types.Volume, error)
 	socket               func(id, token string) (string, error)
 	hibernate            func(id, token string) error
 	wake                 func(id, token string) error
@@ -2000,6 +2002,30 @@ func (f *fakeManager) Renew(_ context.Context, id string, cred pool.Cred, ttl ti
 		return time.Time{}, pool.ErrUnknownSandbox
 	}
 	return f.renew(id, cred.Token, ttl)
+}
+
+func (f *fakeManager) AttachVolumes(
+	_ context.Context,
+	id string,
+	cred pool.Cred,
+	volumes []types.Volume,
+) ([]types.Volume, error) {
+	if f.attachVolumes == nil {
+		return slices.Clone(volumes), nil
+	}
+	return f.attachVolumes(id, credToken(cred), volumes)
+}
+
+func (f *fakeManager) DetachVolumes(
+	_ context.Context,
+	id string,
+	cred pool.Cred,
+	names []string,
+) ([]types.Volume, error) {
+	if f.detachVolumes == nil {
+		return nil, nil
+	}
+	return f.detachVolumes(id, credToken(cred), names)
 }
 
 func (f *fakeManager) AgentSocket(id, token string) (string, error) {

@@ -213,6 +213,52 @@ func (s *Sandbox) Renew(ctx context.Context, ttl time.Duration) (time.Time, erro
 	return resp.Deadline, nil
 }
 
+// AttachVolumes hot-attaches read-only catalog volumes to a running sandbox.
+// Repeating an identical request is idempotent.
+func (s *Sandbox) AttachVolumes(ctx context.Context, volumes ...Volume) ([]Volume, error) {
+	body, err := encodeBody("attach volumes", struct {
+		Volumes []Volume `json:"volumes"`
+	}{Volumes: append([]Volume(nil), volumes...)})
+	if err != nil {
+		return nil, err
+	}
+	response, err := doJSON[struct {
+		Volumes []Volume `json:"volumes"`
+	}](
+		ctx, s.c, http.MethodPost, s.owner,
+		"/v1/sandboxes/"+s.ID+"/volumes/attach",
+		bytes.NewReader(body), s.token, "attach volumes",
+	)
+	if err != nil {
+		return nil, err
+	}
+	s.Volumes = append([]Volume(nil), response.Volumes...)
+	return append([]Volume(nil), s.Volumes...), nil
+}
+
+// DetachVolumes hot-unmounts and detaches named volumes. Already absent names
+// make retries succeed.
+func (s *Sandbox) DetachVolumes(ctx context.Context, names ...string) ([]Volume, error) {
+	body, err := encodeBody("detach volumes", struct {
+		Names []string `json:"names"`
+	}{Names: append([]string(nil), names...)})
+	if err != nil {
+		return nil, err
+	}
+	response, err := doJSON[struct {
+		Volumes []Volume `json:"volumes"`
+	}](
+		ctx, s.c, http.MethodPost, s.owner,
+		"/v1/sandboxes/"+s.ID+"/volumes/detach",
+		bytes.NewReader(body), s.token, "detach volumes",
+	)
+	if err != nil {
+		return nil, err
+	}
+	s.Volumes = append([]Volume(nil), response.Volumes...)
+	return append([]Volume(nil), s.Volumes...), nil
+}
+
 // Close releases the sandbox on its node; releasing one already gone is not
 // an error. It takes no ctx so it stays defer-friendly — bounded internally.
 func (s *Sandbox) Close() error {

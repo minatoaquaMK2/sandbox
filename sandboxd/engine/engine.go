@@ -33,13 +33,13 @@ const (
 	StaleCreateNotCreating StaleCreateOutcome = "not-creating"
 	StaleCreateNotFound    StaleCreateOutcome = "not-found"
 
-	argName       = "--name"
-	argOutput     = "--output"
-	argNetwork    = "--network"
-	argBridge     = "--bridge"
-	formatJSON    = "json"
-	silkdPort     = 2048 // silkd's fixed guest vsock port, the claim-ready anchor
-	egressPort    = 2049 // guest→host egress port; VMM maps it to <vsock_socket>_2049
+	argName    = "--name"
+	argOutput  = "--output"
+	argNetwork = "--network"
+	argBridge  = "--bridge"
+	formatJSON = "json"
+	silkdPort  = 2048 // silkd's fixed guest vsock port, the claim-ready anchor
+	egressPort = 2049 // guest→host egress port; VMM maps it to <vsock_socket>_2049
 	// Match Cocoon's VMMemTransferTimeout so xlarge snapshot/restore operations are not killed early.
 	cmdTimeout    = 10 * time.Minute
 	probeInterval = 20 * time.Millisecond

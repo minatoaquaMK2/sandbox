@@ -139,6 +139,48 @@ func TestClientVolumes(t *testing.T) {
 	}
 }
 
+func TestSandboxAttachDetachVolumesUpdateHandle(t *testing.T) {
+	attached := []Volume{{Name: "kb-0123456789abcdef", Mount: "/agent-context/bases/wiki"}}
+	requests := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if got := r.Header.Get("Authorization"); got != "Bearer sandbox-token" {
+			t.Errorf("authorization=%q", got)
+		}
+		switch r.URL.Path {
+		case "/v1/sandboxes/sb_1/volumes/attach":
+			var body struct {
+				Volumes []Volume `json:"volumes"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			if !slices.Equal(body.Volumes, attached) {
+				t.Errorf("attach body=%v", body.Volumes)
+			}
+			_ = json.NewEncoder(w).Encode(struct {
+				Volumes []Volume `json:"volumes"`
+			}{attached})
+		case "/v1/sandboxes/sb_1/volumes/detach":
+			_ = json.NewEncoder(w).Encode(struct {
+				Volumes []Volume `json:"volumes"`
+			}{nil})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(ts.Close)
+	c := testClient(t, ts)
+	sb := c.Attach(c.addr, "sb_1", "sandbox-token")
+	if got, err := sb.AttachVolumes(t.Context(), attached...); err != nil || !slices.Equal(got, attached) {
+		t.Fatalf("AttachVolumes=%v err=%v", got, err)
+	}
+	if got, err := sb.DetachVolumes(t.Context(), attached[0].Name); err != nil || len(got) != 0 {
+		t.Fatalf("DetachVolumes=%v err=%v", got, err)
+	}
+	if len(sb.Volumes) != 0 || requests != 2 {
+		t.Fatalf("handle volumes=%v requests=%d", sb.Volumes, requests)
+	}
+}
+
 func TestVolumeClaimRedirectPreservesEntries(t *testing.T) {
 	want := []Volume{{Name: "imagenet", Mount: "/datasets/imagenet"}}
 	var got claimRequest
