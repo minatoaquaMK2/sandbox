@@ -274,9 +274,10 @@ type Config struct {
 
 	DiskReserve *DiskReserve `json:"disk_reserve,omitempty"`
 
-	Volumes []VolumeSpec `json:"volumes,omitempty"`
-	Mesh    *MeshConfig  `json:"mesh,omitempty"`
-	Pools   []PoolSpec   `json:"pools"`
+	ManagedVolumeDir string       `json:"managed_volume_dir,omitempty"`
+	Volumes          []VolumeSpec `json:"volumes,omitempty"`
+	Mesh             *MeshConfig  `json:"mesh,omitempty"`
+	Pools            []PoolSpec   `json:"pools"`
 }
 
 // HasEgress reports whether the node can attach egress-lane VMs.
@@ -398,6 +399,9 @@ func (c *Config) validateReplication() error {
 }
 
 func (c *Config) validateVolumes() error {
+	if err := c.ValidateManagedVolumeStore(); err != nil {
+		return err
+	}
 	names := make(map[string]struct{}, len(c.Volumes))
 	paths := make(map[string]string, len(c.Volumes))
 	for _, volume := range c.Volumes {
@@ -418,6 +422,19 @@ func (c *Config) validateVolumes() error {
 		if !types.ValidDirectIO(volume.DirectIO) {
 			return fmt.Errorf("volume %q directio must be on, off, or auto, got %q", volume.Name, volume.DirectIO)
 		}
+	}
+	return nil
+}
+
+func (c *Config) ValidateManagedVolumeStore() error {
+	if c.ManagedVolumeDir == "" {
+		return nil
+	}
+	if !filepath.IsAbs(c.ManagedVolumeDir) || filepath.Clean(c.ManagedVolumeDir) != c.ManagedVolumeDir || c.ManagedVolumeDir == "/" {
+		return fmt.Errorf("managed_volume_dir must be a clean absolute non-root path")
+	}
+	if c.APIToken == "" {
+		return fmt.Errorf("managed_volume_dir requires a nonempty api_token")
 	}
 	return nil
 }
