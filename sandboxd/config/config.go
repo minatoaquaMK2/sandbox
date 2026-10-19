@@ -466,6 +466,14 @@ func (c *Config) ValidateManagedVolumeStore() error {
 		if relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 			return fmt.Errorf("managed_volume_dir must be outside data_dir %s cleanup path", namespace)
 		}
+		relative, err = filepath.Rel(c.ManagedVolumeDir, swept)
+		if err != nil {
+			return fmt.Errorf("compare cleanup path with managed_volume_dir: %w", err)
+		}
+		first, _, _ := strings.Cut(relative, string(filepath.Separator))
+		if first == "disks" {
+			return fmt.Errorf("data_dir %s cleanup path must be outside managed volume backing storage", namespace)
+		}
 	}
 	return nil
 }
