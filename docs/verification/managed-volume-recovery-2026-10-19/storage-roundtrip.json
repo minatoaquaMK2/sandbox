@@ -1,9 +1,0 @@
-{
-  "outer_uuid": "52dc3b92-42e3-403f-a72c-2f58ace0edd6",
-  "normal_unmount": true,
-  "mount_absent_observed": true,
-  "read_only_fsck": "Pass 1: Checking inodes, blocks, and sizes\nPass 2: Checking directory structure\nPass 3: Checking directory connectivity\nPass 4: Checking reference counts\nPass 5: Checking group summary information\n/dev/loop6: 254/786432 files (4.7% non-contiguous), 434402/3145728 blocks\n",
-  "same_loop_backing": "/root/eric/.sandbox-managed-recovery-fixes-20261019/storage.ext4",
-  "host_reboot": false,
-  "power_loss": false
-}

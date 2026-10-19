@@ -140,35 +140,6 @@ continues. Unreadable process metadata and unconfirmed removal still block
 startup. The stale-create collector and recorded process-generation checks
 remain in force.
 
-## Feature map
-
-Each row names observable behavior and the verification level. Real-runtime
-receipts and exact source/binary pins are in the
-[fifteen-case recovery verification](verification/managed-volume-recovery-2026-10-19.md).
-
-| Feature | Real-runtime case | Additional source / HTTP evidence |
-| --- | --- | --- |
-| Sparse 20 GiB allocation, immutable identity and same-request retry | MV-01, MV-02 | Managed CRUD/storage fault tests; HTTP identity tests. |
-| Owner-scoped discovery, foreign/unknown privacy, explicit auth | MV-03 | HTTP privacy and invalid-token tests; constructor rejects managed storage with empty root token. |
-| Conditional deletion, tombstone retry, same-name replacement safety | MV-04 | HTTP precondition tests and registry recovery tests. |
-| Concurrent create/delete/claim admission | MV-05 | Race-enabled pool and HTTP tests. |
-| Explicit first format, caller-owned attach-only mount and flush | MV-06 | No automatic format; attach-only source tests. |
-| Existing catalog live change and restart retain attach-only managed disk | MV-06 | Native #339 mutation tests and SDK wire parity. |
-| Warm VM consumption, second writer/held-delete `409` | MV-07 | Reader/writer matrix source tests. |
-| Crash/restart retains VM generation, data and writer lock with both journal settings | MV-08 | Preclaim crash boundary and startup reconciliation tests. |
-| Release preserves data; different template and VM reuse the same disk | MV-09 | Removal confirmation and registry teardown tests. |
-| Release cancels post-effect catalog attach; both managed delete and catalog writer stay excluded until old VM removal | MV-10 | Cancellation/union fixture and failed-metadata regression tests. |
-| All holders gone before external storage round trip | MV-11 | Registry snapshot and public GET. |
-| Outer ext4 unmount, absence, flush, read-only fsck, remount, same backing identity and guest payload | MV-12 | Loop-backed file on persistent host storage; not host reboot or power-loss proof. |
-| Stopped unclaimed VM does not block startup with an existing managed resource | MV-13 | Dead positive PID, stopped PID zero, unknown metadata, creating collector and ineffective removal controls. |
-| Persisted quarantine resumes removal after restart; ordinary failed claim retains ownership | MV-14 | Seeded failure state and injected runtime removal refusal; source matrix injects registry publication failures. |
-| Reject cleanup-owned directories and symbolic links into managed backing storage before daemon file creation | MV-15 | Eight real-binary refusals; stable data-root/cleanup-root aliases, benign placements and backing-loss regressions. |
-| Catalog symlink alias, post-admission inode replacement, replacement dirty marker | No hostile host race claim | Source regression tests; zero attach effects on rejected replacement. |
-| Failed egress quarantine retirement still fences and attempts removal | No real firewall failure injection | Direct helper test with fake engine. |
-| Corrupt metadata, failed commits, startup safe collector and ancestor ownership | No hardware crash/fsync injection | Source fixtures; failures preserve ownership or reject startup. |
-| Go SDK CRUD and structured errors | No real-VM Go journey | Full Go SDK race suite and HTTP fixtures. |
-| Python SDK CRUD, live methods and timeout/protocol validation | MV-01 through MV-12 | Full Python SDK suite. |
-
 ## Follow-up order
 
 1. Add quiesce/unmount/detach/capture and restore/reattach/remount with failure

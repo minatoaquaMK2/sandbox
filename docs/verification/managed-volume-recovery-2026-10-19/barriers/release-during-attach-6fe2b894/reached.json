@@ -1,1 +1,0 @@
-{"argv": ["vm", "disk", "attach", "sbx-b3baafc3acba0b7904356992ca27fd4e-c0aa1f23cce1", "--path", "/tmp/sandbox-recovery-disk/run/catalog.raw", "--name", "catalog", "--readonly", "--directio", "off"], "pid": 2898564, "action": "block_after"}
