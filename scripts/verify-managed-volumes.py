@@ -516,11 +516,14 @@ class Run:
         loop = receipt["loop"]
         assert self.root.is_relative_to(mount) and mount != Path("/")
         assert not receipt_path.is_relative_to(mount)
-        actual = json.loads(self.command(["losetup", "--json", loop]))["loopdevices"][0]
+        actual = json.loads(self.command(["losetup", "--list", "--json", loop]))["loopdevices"][0]
         assert Path(actual["back-file"]).resolve() == image, actual
         assert self.command(["findmnt", "-no", "SOURCE", "--mountpoint", mount]).strip() == loop
         assert not json.loads((self.root / "managed/registry.json").read_text()).get("holds")
         before = self.command(["blkid", "-s", "UUID", "-o", "value", loop]).strip()
+        receipt_path.with_name("storage-checkpoint.json").write_text(
+            json.dumps({**self.provenance(), **self.state["persistent_checkpoint"]}, indent=2) + "\n"
+        )
         self.stop("sandboxd")
         for vm in json.loads(self.cocoon("vm", "list", "--format", "json")):
             assert vm.get("socket_path", "").startswith(str(self.root / "run") + "/"), vm

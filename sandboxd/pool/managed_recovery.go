@@ -9,8 +9,6 @@ import (
 	"github.com/cocoonstack/sandbox/sandboxd/types"
 )
 
-// An unknown VM cannot have attached through our write-ahead claim path, but it
-// may predate the registry. Persist its process proof before trusting removal.
 func (m *Manager) recoverManagedOrphans(ctx context.Context, claims map[string]*types.Sandbox, live map[string]types.VMRecord, owned map[string]bool) error {
 	r := m.managed
 	if r == nil {

@@ -82,7 +82,6 @@ type volumeRegistryData struct {
 	Deleted map[volumeID]volumeTombstone `json:"deleted"`
 }
 
-// Lock order is Manager.mu then mu. Device calls hold neither lock.
 type volumeRegistry struct {
 	rootDir, disksDir os.FileInfo
 	mu                sync.Mutex
@@ -154,7 +153,6 @@ func openVolumeRegistry(dir, node string) (*volumeRegistry, error) {
 }
 
 func privateVolumeDir(path string) error {
-	// Check every existing ancestor: accepting an ancestor symlink would defeat private backing paths.
 	for p := path; p != "/"; p = filepath.Dir(p) {
 		st, err := os.Lstat(p)
 		if errors.Is(err, os.ErrNotExist) {

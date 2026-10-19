@@ -272,8 +272,6 @@ func (m *Manager) recoverManaged(ctx context.Context, claims map[string]*types.S
 					return owned, managedStorageError()
 				}
 			}
-			// The reservation can include a live-mutation effect that claims.json never recorded.
-			// Keep that union held until removal; the journal remains the public confirmed set.
 			owned[h.VMName] = true
 			if err := m.activateManaged(h.SandboxID); err != nil {
 				return owned, err

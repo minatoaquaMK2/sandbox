@@ -266,7 +266,6 @@ func TestManagedRetirementSurvivesRestartAndStaleClaim(t *testing.T) {
 				t.Fatal(err)
 			}
 			e.falseRemove.Store(true)
-			// Keep claims.json deliberately stale at the durable retirement boundary.
 			if err := m.retireManaged(sb.ID); err != nil {
 				t.Fatal(err)
 			}

@@ -340,11 +340,14 @@ class ManagedCases:
         spec = spec_from_file_location("pv_driver", Path(__file__).resolve().parents[1] / "verify-managed-volumes.py")
         module = module_from_spec(spec)
         spec.loader.exec_module(module)
-        vm = self.vm(self.sb)
-        identity = module.process_identity(vm["pid"])
         results = []
         for sync in ("false", "true"):
+            self.sb.close()
             self.r.args.sync_claims = sync
+            self.r.restart()
+            self.sb = self.claim()
+            vm = self.vm(self.sb)
+            identity = module.process_identity(vm["pid"])
             self.r.stop("sandboxd", signal.SIGKILL)
             self.r.restart()
             current = self.vm(self.sb)
@@ -363,7 +366,9 @@ class ManagedCases:
             )
             assert status == 409 and self.sb.id in json.dumps(conflict), (status, conflict)
             assert self.create(self.name, 20, status=200)["id"] == self.info["id"]
-            results.append({"sync_claims": sync, "same_vmm_pid_and_start": True, **marker})
+            results.append(
+                {"sync_claims": sync, "fresh_claim_before_crash": True, "same_vmm_pid_and_start": True, **marker}
+            )
         return {"restart_matrix": results}
 
     def deletion(self):
