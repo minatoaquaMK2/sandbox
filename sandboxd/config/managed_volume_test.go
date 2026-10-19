@@ -73,3 +73,39 @@ func TestManagedVolumeStoreResolvesDataDirectoryAliases(t *testing.T) {
 		t.Fatalf("validation created data directories: %v", err)
 	}
 }
+
+func TestManagedVolumeStoreRejectsCleanupDirectoryAliases(t *testing.T) {
+	for _, namespace := range []string{"readers", "goldens"} {
+		t.Run(namespace, func(t *testing.T) {
+			root := t.TempDir()
+			data := filepath.Join(root, "data")
+			external := filepath.Join(root, "external")
+			for _, dir := range []string{data, external} {
+				if err := os.Mkdir(dir, 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.Symlink(external, filepath.Join(data, namespace)); err != nil {
+				t.Fatal(err)
+			}
+			for _, tc := range []struct {
+				path  string
+				allow bool
+			}{
+				{external, false},
+				{filepath.Join(external, "managed"), false},
+				{filepath.Join(data, "managed"), true},
+				{root, true},
+			} {
+				cfg := Config{DataDir: data, ManagedVolumeDir: tc.path, APIToken: "root"}
+				err := cfg.ValidateManagedVolumeStore()
+				if (err == nil) != tc.allow {
+					t.Errorf("%s alias target %q accepted=%v, want %v: %v", namespace, tc.path, err == nil, tc.allow, err)
+				}
+			}
+			if _, err := os.Stat(filepath.Join(external, "managed")); !os.IsNotExist(err) {
+				t.Fatalf("validation created managed directory: %v", err)
+			}
+		})
+	}
+}
