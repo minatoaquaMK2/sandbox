@@ -1,0 +1,103 @@
+{
+  "level": "direct host command observations before round trip",
+  "observations": [
+    {
+      "argv": [
+        "findmnt",
+        "--json",
+        "--target",
+        "/root/eric/.sandbox-managed-recovery-fixes-20261019/storage.ext4"
+      ],
+      "exit": 0,
+      "stdout": {
+        "filesystems": [
+          {
+            "target": "/",
+            "source": "/dev/mapper/ubuntu--vg-ubuntu--lv",
+            "fstype": "ext4",
+            "options": "rw,relatime"
+          }
+        ]
+      }
+    },
+    {
+      "argv": [
+        "findmnt",
+        "--json",
+        "--mountpoint",
+        "/tmp/sandbox-recovery-disk"
+      ],
+      "exit": 0,
+      "stdout": {
+        "filesystems": [
+          {
+            "target": "/tmp/sandbox-recovery-disk",
+            "source": "/dev/loop6",
+            "fstype": "ext4",
+            "options": "rw,nosuid,nodev,relatime"
+          }
+        ]
+      }
+    },
+    {
+      "argv": [
+        "losetup",
+        "--list",
+        "--json",
+        "/dev/loop6"
+      ],
+      "exit": 0,
+      "stdout": {
+        "loopdevices": [
+          {
+            "name": "/dev/loop6",
+            "sizelimit": 0,
+            "offset": 0,
+            "autoclear": false,
+            "ro": false,
+            "back-file": "/root/eric/.sandbox-managed-recovery-fixes-20261019/storage.ext4",
+            "dio": false,
+            "log-sec": 512
+          }
+        ]
+      }
+    },
+    {
+      "argv": [
+        "lsblk",
+        "--json",
+        "--inverse",
+        "--output",
+        "NAME,TYPE,SIZE,FSTYPE",
+        "/dev/mapper/ubuntu--vg-ubuntu--lv"
+      ],
+      "exit": 0,
+      "stdout": {
+        "blockdevices": [
+          {
+            "name": "ubuntu--vg-ubuntu--lv",
+            "type": "lvm",
+            "size": "100G",
+            "fstype": "ext4",
+            "children": [
+              {
+                "name": "nvme6n1p3",
+                "type": "part",
+                "size": "891.1G",
+                "fstype": "LVM2_member",
+                "children": [
+                  {
+                    "name": "nvme6n1",
+                    "type": "disk",
+                    "size": "894.2G",
+                    "fstype": null
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

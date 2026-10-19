@@ -1,0 +1,68 @@
+{
+  "verification_attempt": "7f094dff5ebacc26022839a72056cdf0",
+  "source": "64e88662893de5f919e46e45871e7c13f75e8f50",
+  "sdk_source": "64e88662893de5f919e46e45871e7c13f75e8f50",
+  "sdk_digest": "bd22919002ba7d1300df96d1f811d672da5b165b9392968fa8b30b52e808ec4e",
+  "driver_source": "64e88662893de5f919e46e45871e7c13f75e8f50",
+  "binary_vcs": [
+    "build\tvcs.revision=64e88662893de5f919e46e45871e7c13f75e8f50",
+    "build\tvcs.time=2026-10-19T06:55:34Z",
+    "build\tvcs.modified=false"
+  ],
+  "fixture_sha256": {
+    "verify-managed-volumes.py": "c5c6fd9cedec7d5f96cb25b7c1a5a8a741b7d2046d5d9796d7d4a26d685923b5",
+    "managed-volume-cases.py": "9b501699acccdb6dd3708151faed386ab1deb4953f9df48e1b838efcdd557e23",
+    "managed-volume-runtime.py": "109dcb88c13cc6d3bd4636030090cf2be31c77ac95506859d62efe057d3beca0"
+  },
+  "case_ids": [
+    "MV-01",
+    "MV-02",
+    "MV-03",
+    "MV-04",
+    "MV-05",
+    "MV-06",
+    "MV-07",
+    "MV-08",
+    "MV-09",
+    "MV-10",
+    "MV-11",
+    "MV-12",
+    "MV-13",
+    "MV-14",
+    "MV-15"
+  ],
+  "sandboxd_sha256": "e5fbcc8022c24f120f5b0edbb1c5002e90a3d1a04c965ccb44af047dff4c1793",
+  "runtime_sha256": "26d9e8a8d5594496c14dd67f15138c72940ed04b3ffcf25676cd34382879e634",
+  "runtime_build": "/tmp/sandbox-recovery-disk/run/bin/cocoon: go1.27.1\n\tpath\tgithub.com/cocoonstack/cocoon\n\tmod\tgithub.com/cocoonstack/cocoon\tv0.7.3\t\n\tdep\tgithub.com/cespare/xxhash/v2\tv2.3.0\th1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=\n\tdep\tgithub.com/cockroachdb/errors\tv1.14.0\th1:EfdVEJpN3z8rPMo43Yit59LxoiIa470fSXpZXuEs+ZI=\n\tdep\tgithub.com/cockroachdb/logtags\tv0.0.0-20241215232642-bb51bb14a506\th1:ASDL+UJcILMqgNeV5jiqR4j+sTuvQNHdf2chuKj1M5k=\n\tdep\tgithub.com/cockroachdb/redact\tv1.1.8\th1:8eVLLj6juKxiKrAEw2b8cJvNqWq++U8WOfQFuL7KTaA=\n\tdep\tgithub.com/cocoonstack/cocoon-agent\tv0.2.5\th1:ckQCh3tB+Ka8MClAlAPTKj/r7jU6CDpwLbH7NteSwmE=\n\tdep\tgithub.com/containernetworking/cni\tv1.3.1\th1:gnHlU/YC1bJcS+CSh+pYQKeuu4O4gsMGW1NMaLhkzW4=\n\tdep\tgithub.com/containernetworking/plugins\tv1.9.1\th1:8oU6WsIsU3bpnNZuvHp74a6cE1MJwbj2P7s4/yTUNlA=\n\tdep\tgithub.com/creack/pty\tv1.1.24\th1:bJrF4RRfyJnbTJqzRLHzcGaZK1NeM5kTC9jGgovnR1s=\n\tdep\tgithub.com/docker/cli\tv29.9.1+incompatible\th1:E4YGy7TMkPk7mFsXTVUyjHxVeJdjTDfIS0X4Q0+ioQ0=\n\tdep\tgithub.com/docker/docker-credential-helpers\tv0.9.10\th1:LCWwv7UmS7fQVmdKDWeMuureOeY5kkbC5kZfkzxkS6k=\n\tdep\tgithub.com/docker/go-units\tv0.5.0\th1:69rxXcBk27SvSaaxTtLh/8llcHD8vYHT7WSdRZ/jvr4=\n\tdep\tgithub.com/dustin/go-humanize\tv1.1.0\th1:dbKTrvD0klcbBV/h4AWJdMuZogJACoMlvWIWZ5b2xWg=\n\tdep\tgithub.com/fsnotify/fsnotify\tv1.10.1\th1:b0/UzAf9yR5rhf3RPm9gf3ehBPpf0oZKIjtpKrx59Ho=\n\tdep\tgithub.com/getsentry/sentry-go\tv0.50.0\th1:gkO59rn/i0RCAXUUTflC5QVbTQGPXbaFabs2olVzc9g=\n\tdep\tgithub.com/go-viper/mapstructure/v2\tv2.5.0\th1:vM5IJoUAy3d7zRSVtIwQgBj7BiWtMPfmPEgAXnvj1Ro=\n\tdep\tgithub.com/gofrs/flock\tv0.13.1\th1:jjREztyBeSKBZYAC+mgc1laB+xsgy4kYMf3FbKF2UBo=\n\tdep\tgithub.com/gogo/protobuf\tv1.3.2\th1:Ov1cvc58UF3b5XjBnZv7+opcTcQFZebYjWzi34vdm4Q=\n\tdep\tgithub.com/google/go-containerregistry\tv0.22.1\th1:RZuuSYhTvlDvtsK+NkutoCZ//C0X2ebLK8X8l3ULs84=\n\tdep\tgithub.com/google/uuid\tv1.6.0\th1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=\n\tdep\tgithub.com/klauspost/compress\tv1.20.3\th1:zWNoFqq/lSuYQRim3dUXlXeA0IqwuZGicdG5ZTfY5j4=\n\tdep\tgithub.com/kr/pretty\tv0.3.1\th1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=\n\tdep\tgithub.com/kr/text\tv0.2.0\th1:5Nx0Ya0ZqY2ygV366QzturHI13Jq95ApcVaJBhpS+AY=\n\tdep\tgithub.com/mattn/go-colorable\tv0.1.16\th1:+2YjeAe7xP1OQbZW1jERPWWCDLlNqFNCvjiqGiAt84A=\n\tdep\tgithub.com/mattn/go-isatty\tv0.0.24\th1:tGZZoVgT/KiqK1c8ocVLeDS8BSWMRd47J3Lbz7vsReI=\n\tdep\tgithub.com/moby/term\tv0.5.2\th1:6qk3FJAFDs6i/q3W/pQ97SX192qKfZgGjCQqfCJkgzQ=\n\tdep\tgithub.com/opencontainers/go-digest\tv1.0.0\th1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U=\n\tdep\tgithub.com/opencontainers/image-spec\tv1.1.1\th1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040=\n\tdep\tgithub.com/pelletier/go-toml/v2\tv2.4.3\th1:GTRvJQutkOSftxIFD5xw9aepkYNuPWmVJpffdDPYVpY=\n\tdep\tgithub.com/pkg/errors\tv0.9.1\th1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=\n\tdep\tgithub.com/projecteru2/core\tv0.1.7\th1:f2EdndjWFBYX6pqLZ68VcFYMkXZu6RivotaKUGCNwDQ=\n\tdep\tgithub.com/remyoudompheng/bigfft\tv0.0.0-20230129092748-24d4a6f8daec\th1:W09IVJc94icq4NjY3clb7Lk8O1qJ8BdBEF8z0ibU0rE=\n\tdep\tgithub.com/rogpeppe/go-internal\tv1.16.0\th1:O9DK+vNMDVGLr2BeZqmpLeMjiMNkuXfcqntWbZV6S5g=\n\tdep\tgithub.com/rs/zerolog\tv1.35.1\th1:m7xQeoiLIiV0BCEY4Hs+j2NG4Gp2o2KPKmhnnLiazKI=\n\tdep\tgithub.com/sagikazarmark/locafero\tv0.12.0\th1:/NQhBAkUb4+fH1jivKHWusDYFjMOOKU88eegjfxfHb4=\n\tdep\tgithub.com/sirupsen/logrus\tv1.10.2\th1:G2SED73/qrAu6YwbdxOD6peLkCBI3z7L+ykJFTXJBBo=\n\tdep\tgithub.com/spf13/afero\tv1.15.0\th1:b/YBCLWAJdFWJTN9cLhiXXcD7mzKn9Dm86dNnfyQw1I=\n\tdep\tgithub.com/spf13/cast\tv1.10.0\th1:h2x0u2shc1QuLHfxi+cTJvs30+ZAHOGRic8uyGTDWxY=\n\tdep\tgithub.com/spf13/cobra\tv1.10.2\th1:DMTTonx5m65Ic0GOoRY2c16WCbHxOOw6xxezuLaBpcU=\n\tdep\tgithub.com/spf13/pflag\tv1.0.10\th1:4EBh2KAYBwaONj6b2Ye1GiHfwjqyROoF4RwYO+vPwFk=\n\tdep\tgithub.com/spf13/viper\tv1.21.0\th1:x5S+0EU27Lbphp4UKm1C+1oQO+rKx36vfCoaVebLFSU=\n\tdep\tgithub.com/subosito/gotenv\tv1.6.0\th1:9NlTDc1FTs4qu0DDq7AEtTPNw6SVm7uBMsUCUjABIf8=\n\tdep\tgithub.com/vishvananda/netlink\tv1.3.1\th1:3AEMt62VKqz90r0tmNhog0r/PpWKmrEShJU0wJW6bV0=\n\tdep\tgithub.com/vishvananda/netns\tv0.0.5\th1:DfiHV+j8bA32MFM7bfEunvT8IAqQ/NzSJHtcmW5zdEY=\n\tdep\tgo.opentelemetry.io/otel\tv1.47.0\th1:j7ALJ/zgkS7Z6aeJW09p8VC9804bC+PpeTfCD4XPnOM=\n\tdep\tgo.opentelemetry.io/otel/trace\tv1.47.0\th1:JOjX/Oci8K94QHddo+bbfya/Ai/nf6/dt9ZfrFNWSrM=\n\tdep\tgo.yaml.in/yaml/v3\tv3.0.5\th1:N6y/pJk8buWs9NY5ERU2HSMfm+IuD/OtfdAnq6kESPw=\n\tdep\tgolang.org/x/sync\tv0.24.0\th1:iqiDrGoDgyuvAKrhLQthUEzU/R378N78gXbBjxed7oA=\n\tdep\tgolang.org/x/sys\tv0.49.0\th1:XbzkgYJHdqh/8m2Uu0W/dQv8nktxx4BFHp1M0gROTXA=\n\tdep\tgolang.org/x/text\tv0.43.0\th1:1QivrlhwAsnMOcqgOdl9my7s9OyZl8O5/UGUTJVXoWc=\n\tdep\tgoogle.golang.org/grpc\tv1.84.0\th1:soMyaPJ8pAak5PIQ0DGBUir0XRo2fRoMqhNWMLlLxO0=\n\tdep\tgoogle.golang.org/protobuf\tv1.36.12\th1:pJOKDDOyeXErUroCihFAd5LQuwXBSpVnKGrj5o/fwxc=\n\tdep\tgopkg.in/natefinch/lumberjack.v2\tv2.2.1\th1:bBRl1b0OH9s/DuPhuXpNl+VtCaJXFZ5/uEFST95x9zc=\n\tdep\tmodernc.org/libc\tv1.77.1\th1:Ct8j47QtiZ1Enj2DtFXQtUqrPCAjdCmPjtCuvrYQ0Hs=\n\tdep\tmodernc.org/mathutil\tv1.7.1\th1:GCZVGXdaN8gTqB1Mf/usp1Y/hSqgI2vAGGP4jZMCxOU=\n\tdep\tmodernc.org/memory\tv1.12.1\th1:nFMiWrpStgZczNl6XI9GnIk/rWhYIyHGUaR04pGbp9g=\n\tdep\tmodernc.org/sqlite\tv1.60.1\th1:/blz53O951KWFOso4QQvEs/Fq6cDBKLtMVrYNSeJVKw=\n\tbuild\t-buildmode=exe\n\tbuild\t-compiler=gc\n\tbuild\t-ldflags=\"-s -X github.com/cocoonstack/cocoon/version.REVISION=52d78db2b270c46f8331cb94eb636da3514e21f7 -X github.com/cocoonstack/cocoon/version.VERSION=v0.7.3 -X github.com/cocoonstack/cocoon/version.BUILTAT=2026-10-18T06:00:03Z\"\n\tbuild\tCGO_ENABLED=0\n\tbuild\tGOARCH=amd64\n\tbuild\tGOOS=linux\n\tbuild\tGOAMD64=v1\n\tbuild\tvcs=git\n\tbuild\tvcs.revision=52d78db2b270c46f8331cb94eb636da3514e21f7\n\tbuild\tvcs.time=2026-10-18T05:54:15Z\n\tbuild\tvcs.modified=false\n",
+  "hypervisor_version": "cloud-hypervisor v54.0.0",
+  "hypervisor_sha256": "3fe80a8fd7f3fb2a2a59bbcfa50dea6fe8c3c301004c5a4fd91208383cfcb457",
+  "rootfs_sha256": "4da536f6057740c9b472973cc45c9d6b8418aaf810d7df7879a0ff6af1b0e93e",
+  "rootfs_layers_sha256": {
+    "/root/eric/.sandbox-managed-volumes-20261019/layer-1.tar": "f8961a496a5510810a2c38d6791178acd622bbc1006ae96620a4922f26e77a60",
+    "/root/eric/.sandbox-managed-volumes-20261019/layer-2.tar": "f9496ad353017b6ec17668cb1ea8ee9adb04763db69d492845bc7e8c316a4408",
+    "/root/eric/.sandbox-managed-volumes-20261019/layer-3.tar": "89b200335e84419dd80a296a1fdf82a77a00b4f310cd85a57bd966ee8cc8bd7c"
+  },
+  "guest_kernel": "6.18.37",
+  "host_kernel": "7.0.0-38-generic",
+  "node": "node113",
+  "host_filesystem": "ext2/ext3",
+  "templates": [
+    {
+      "id": "sha256:53adec038ea702d9f0618cffee07c636a9dcf5f56e903cd13c53333536d58025",
+      "name": "pv-a:local",
+      "type": "oci",
+      "size": 168321352,
+      "created_at": "2026-10-19T06:56:32.179025104Z"
+    },
+    {
+      "id": "sha256:a172697d5a139d46365885511202da0b0eaab64ee4aeb0acbd94c2d6d3448a32",
+      "name": "pv-b:local",
+      "type": "oci",
+      "size": 168321352,
+      "created_at": "2026-10-19T06:56:33.276127114Z"
+    }
+  ],
+  "sync_claims": true,
+  "net_scope": "39",
+  "cgroup_parent": "tenant-pv-39bb40a59bcbdfa4.slice"
+}

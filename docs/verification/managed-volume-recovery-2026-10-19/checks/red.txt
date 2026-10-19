@@ -1,0 +1,43 @@
+--- FAIL: TestManagedQuarantineRemovalSurvivesFailedRetirementRestart (0.09s)
+    --- FAIL: TestManagedQuarantineRemovalSurvivesFailedRetirementRestart/async/unpublished (0.02s)
+        managed_recovery_regression_test.go:63: quarantined VM survived removal retry after restart: present=true err=<nil>
+    --- FAIL: TestManagedQuarantineRemovalSurvivesFailedRetirementRestart/sync/unpublished (0.02s)
+        managed_recovery_regression_test.go:63: quarantined VM survived removal retry after restart: present=true err=<nil>
+--- FAIL: TestManagedStartupCleansDeadOrphansAndRefusesUnknownProcess (0.03s)
+    --- FAIL: TestManagedStartupCleansDeadOrphansAndRefusesUnknownProcess/stopped-absent-pid (0.00s)
+        managed_recovery_regression_test.go:144: dead orphan blocked startup: volume storage requires recovery; retry after recovery
+    --- FAIL: TestManagedStartupCleansDeadOrphansAndRefusesUnknownProcess/running-absent-pid (0.00s)
+        managed_recovery_regression_test.go:144: dead orphan blocked startup: volume storage requires recovery; retry after recovery
+    --- FAIL: TestManagedStartupCleansDeadOrphansAndRefusesUnknownProcess/stopped-zero-pid (0.01s)
+        managed_recovery_regression_test.go:144: dead orphan blocked startup: volume storage requires recovery; retry after recovery
+--- FAIL: TestManagedStoreRejectsSweepOwnedPathsBeforeCreatingFiles (0.01s)
+    --- FAIL: TestManagedStoreRejectsSweepOwnedPathsBeforeCreatingFiles/readers (0.00s)
+        managed_recovery_regression_test.go:171: accepted managed store inside startup cleanup namespace
+    --- FAIL: TestManagedStoreRejectsSweepOwnedPathsBeforeCreatingFiles/readers/managed (0.00s)
+        managed_recovery_regression_test.go:171: accepted managed store inside startup cleanup namespace
+    --- FAIL: TestManagedStoreRejectsSweepOwnedPathsBeforeCreatingFiles/fork-persistent (0.00s)
+        managed_recovery_regression_test.go:171: accepted managed store inside startup cleanup namespace
+    --- FAIL: TestManagedStoreRejectsSweepOwnedPathsBeforeCreatingFiles/fork-persistent/managed (0.00s)
+        managed_recovery_regression_test.go:171: accepted managed store inside startup cleanup namespace
+    --- FAIL: TestManagedStoreRejectsSweepOwnedPathsBeforeCreatingFiles/goldens (0.00s)
+        managed_recovery_regression_test.go:174: unsafe store modified before rejection: <nil>
+    --- FAIL: TestManagedStoreRejectsSweepOwnedPathsBeforeCreatingFiles/goldens/managed (0.00s)
+        managed_recovery_regression_test.go:171: accepted managed store inside startup cleanup namespace
+FAIL
+FAIL	github.com/cocoonstack/sandbox/sandboxd/pool	0.190s
+--- FAIL: TestManagedVolumeStoreExcludesStartupCleanupPaths (0.00s)
+    --- FAIL: TestManagedVolumeStoreExcludesStartupCleanupPaths//tmp/TestManagedVolumeStoreExcludesStartupCleanupPaths2276415235/001/data/readers (0.00s)
+        managed_volume_test.go:30: path "/tmp/TestManagedVolumeStoreExcludesStartupCleanupPaths2276415235/001/data/readers" accepted=true, want false: <nil>
+    --- FAIL: TestManagedVolumeStoreExcludesStartupCleanupPaths//tmp/TestManagedVolumeStoreExcludesStartupCleanupPaths2276415235/001/data/readers/managed (0.00s)
+        managed_volume_test.go:30: path "/tmp/TestManagedVolumeStoreExcludesStartupCleanupPaths2276415235/001/data/readers/managed" accepted=true, want false: <nil>
+    --- FAIL: TestManagedVolumeStoreExcludesStartupCleanupPaths//tmp/TestManagedVolumeStoreExcludesStartupCleanupPaths2276415235/001/data/fork-state (0.00s)
+        managed_volume_test.go:30: path "/tmp/TestManagedVolumeStoreExcludesStartupCleanupPaths2276415235/001/data/fork-state" accepted=true, want false: <nil>
+    --- FAIL: TestManagedVolumeStoreExcludesStartupCleanupPaths//tmp/TestManagedVolumeStoreExcludesStartupCleanupPaths2276415235/001/data/fork-state/managed (0.00s)
+        managed_volume_test.go:30: path "/tmp/TestManagedVolumeStoreExcludesStartupCleanupPaths2276415235/001/data/fork-state/managed" accepted=true, want false: <nil>
+    --- FAIL: TestManagedVolumeStoreExcludesStartupCleanupPaths//tmp/TestManagedVolumeStoreExcludesStartupCleanupPaths2276415235/001/data/goldens (0.00s)
+        managed_volume_test.go:30: path "/tmp/TestManagedVolumeStoreExcludesStartupCleanupPaths2276415235/001/data/goldens" accepted=true, want false: <nil>
+    --- FAIL: TestManagedVolumeStoreExcludesStartupCleanupPaths//tmp/TestManagedVolumeStoreExcludesStartupCleanupPaths2276415235/001/data/goldens/managed (0.00s)
+        managed_volume_test.go:30: path "/tmp/TestManagedVolumeStoreExcludesStartupCleanupPaths2276415235/001/data/goldens/managed" accepted=true, want false: <nil>
+FAIL
+FAIL	github.com/cocoonstack/sandbox/sandboxd/config	0.032s
+FAIL

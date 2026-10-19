@@ -1,0 +1,21 @@
+--- FAIL: TestManagedStorePreservesBackingWhenCleanupAliasesDisks (0.01s)
+    --- FAIL: TestManagedStorePreservesBackingWhenCleanupAliasesDisks/readers (0.00s)
+        managed_recovery_regression_test.go:208: constructor accepted cleanup alias into managed backing directory
+        managed_recovery_regression_test.go:216: managed backing lost: open /tmp/TestManagedStorePreservesBackingWhenCleanupAliasesDisksreaders3938728787/001/managed/disks/vol_fba0f2f9b2fb03173d5979c0e64ab35b.raw: no such file or directory
+    --- FAIL: TestManagedStorePreservesBackingWhenCleanupAliasesDisks/goldens (0.00s)
+        managed_recovery_regression_test.go:208: constructor accepted cleanup alias into managed backing directory
+        managed_recovery_regression_test.go:216: managed backing lost: open /tmp/TestManagedStorePreservesBackingWhenCleanupAliasesDisksgoldens1722780860/001/managed/disks/vol_19541a1bc7d5859f80e7a611a128062e.raw: no such file or directory
+FAIL
+FAIL	github.com/cocoonstack/sandbox/sandboxd/pool	0.100s
+--- FAIL: TestManagedVolumeStoreProtectsBackingDirectoryFromCleanupAliases (0.01s)
+    --- FAIL: TestManagedVolumeStoreProtectsBackingDirectoryFromCleanupAliases/readers/disks (0.00s)
+        managed_volume_test.go:132: cleanup alias "disks" accepted=true, want false: <nil>
+    --- FAIL: TestManagedVolumeStoreProtectsBackingDirectoryFromCleanupAliases/readers/disks/nested (0.00s)
+        managed_volume_test.go:132: cleanup alias "disks/nested" accepted=true, want false: <nil>
+    --- FAIL: TestManagedVolumeStoreProtectsBackingDirectoryFromCleanupAliases/goldens/disks (0.00s)
+        managed_volume_test.go:132: cleanup alias "disks" accepted=true, want false: <nil>
+    --- FAIL: TestManagedVolumeStoreProtectsBackingDirectoryFromCleanupAliases/goldens/disks/nested (0.00s)
+        managed_volume_test.go:132: cleanup alias "disks/nested" accepted=true, want false: <nil>
+FAIL
+FAIL	github.com/cocoonstack/sandbox/sandboxd/config	0.047s
+FAIL

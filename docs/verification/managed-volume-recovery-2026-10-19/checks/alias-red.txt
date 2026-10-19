@@ -1,0 +1,36 @@
+--- FAIL: TestManagedVolumeStoreExcludesStartupCleanupPaths (0.00s)
+    --- FAIL: TestManagedVolumeStoreExcludesStartupCleanupPaths//tmp/TestManagedVolumeStoreExcludesStartupCleanupPaths3631539406/001/data/readers (0.00s)
+        managed_volume_test.go:31: path "/tmp/TestManagedVolumeStoreExcludesStartupCleanupPaths3631539406/001/data/readers" accepted=true, want false: <nil>
+    --- FAIL: TestManagedVolumeStoreExcludesStartupCleanupPaths//tmp/TestManagedVolumeStoreExcludesStartupCleanupPaths3631539406/001/data/readers/managed (0.00s)
+        managed_volume_test.go:31: path "/tmp/TestManagedVolumeStoreExcludesStartupCleanupPaths3631539406/001/data/readers/managed" accepted=true, want false: <nil>
+    --- FAIL: TestManagedVolumeStoreExcludesStartupCleanupPaths//tmp/TestManagedVolumeStoreExcludesStartupCleanupPaths3631539406/001/data/fork-state (0.00s)
+        managed_volume_test.go:31: path "/tmp/TestManagedVolumeStoreExcludesStartupCleanupPaths3631539406/001/data/fork-state" accepted=true, want false: <nil>
+    --- FAIL: TestManagedVolumeStoreExcludesStartupCleanupPaths//tmp/TestManagedVolumeStoreExcludesStartupCleanupPaths3631539406/001/data/fork-state/managed (0.00s)
+        managed_volume_test.go:31: path "/tmp/TestManagedVolumeStoreExcludesStartupCleanupPaths3631539406/001/data/fork-state/managed" accepted=true, want false: <nil>
+    --- FAIL: TestManagedVolumeStoreExcludesStartupCleanupPaths//tmp/TestManagedVolumeStoreExcludesStartupCleanupPaths3631539406/001/data/goldens (0.00s)
+        managed_volume_test.go:31: path "/tmp/TestManagedVolumeStoreExcludesStartupCleanupPaths3631539406/001/data/goldens" accepted=true, want false: <nil>
+    --- FAIL: TestManagedVolumeStoreExcludesStartupCleanupPaths//tmp/TestManagedVolumeStoreExcludesStartupCleanupPaths3631539406/001/data/goldens/managed (0.00s)
+        managed_volume_test.go:31: path "/tmp/TestManagedVolumeStoreExcludesStartupCleanupPaths3631539406/001/data/goldens/managed" accepted=true, want false: <nil>
+--- FAIL: TestManagedVolumeStoreResolvesDataDirectoryAliases (0.00s)
+    --- FAIL: TestManagedVolumeStoreResolvesDataDirectoryAliases/alias-readers (0.00s)
+        managed_volume_test.go:68: data="/tmp/TestManagedVolumeStoreResolvesDataDirectoryAliases2905542296/001/alias" managed="/tmp/TestManagedVolumeStoreResolvesDataDirectoryAliases2905542296/001/real/readers/managed" accepted=true, want false: <nil>
+    --- FAIL: TestManagedVolumeStoreResolvesDataDirectoryAliases/alias-goldens (0.00s)
+        managed_volume_test.go:68: data="/tmp/TestManagedVolumeStoreResolvesDataDirectoryAliases2905542296/001/alias" managed="/tmp/TestManagedVolumeStoreResolvesDataDirectoryAliases2905542296/001/real/goldens" accepted=true, want false: <nil>
+    --- FAIL: TestManagedVolumeStoreResolvesDataDirectoryAliases/alias-fork (0.00s)
+        managed_volume_test.go:68: data="/tmp/TestManagedVolumeStoreResolvesDataDirectoryAliases2905542296/001/alias" managed="/tmp/TestManagedVolumeStoreResolvesDataDirectoryAliases2905542296/001/real/fork-persistent" accepted=true, want false: <nil>
+    --- FAIL: TestManagedVolumeStoreResolvesDataDirectoryAliases/alias-new-suffix (0.00s)
+        managed_volume_test.go:68: data="/tmp/TestManagedVolumeStoreResolvesDataDirectoryAliases2905542296/001/alias/new/data" managed="/tmp/TestManagedVolumeStoreResolvesDataDirectoryAliases2905542296/001/real/new/data/readers/managed" accepted=true, want false: <nil>
+    --- FAIL: TestManagedVolumeStoreResolvesDataDirectoryAliases/relative (0.00s)
+        managed_volume_test.go:68: data="real" managed="/tmp/TestManagedVolumeStoreResolvesDataDirectoryAliases2905542296/001/real/readers/managed" accepted=true, want false: <nil>
+    --- FAIL: TestManagedVolumeStoreResolvesDataDirectoryAliases/empty (0.00s)
+        managed_volume_test.go:68: data="" managed="/tmp/TestManagedVolumeStoreResolvesDataDirectoryAliases2905542296/001/fork-store" accepted=true, want false: <nil>
+--- FAIL: TestManagedVolumeStoreRejectsCleanupDirectoryAliases (0.00s)
+    --- FAIL: TestManagedVolumeStoreRejectsCleanupDirectoryAliases/readers (0.00s)
+        managed_volume_test.go:103: readers alias target "/tmp/TestManagedVolumeStoreRejectsCleanupDirectoryAliasesreaders3584885346/001/external" accepted=true, want false: <nil>
+        managed_volume_test.go:103: readers alias target "/tmp/TestManagedVolumeStoreRejectsCleanupDirectoryAliasesreaders3584885346/001/external/managed" accepted=true, want false: <nil>
+    --- FAIL: TestManagedVolumeStoreRejectsCleanupDirectoryAliases/goldens (0.00s)
+        managed_volume_test.go:103: goldens alias target "/tmp/TestManagedVolumeStoreRejectsCleanupDirectoryAliasesgoldens2842405874/001/external" accepted=true, want false: <nil>
+        managed_volume_test.go:103: goldens alias target "/tmp/TestManagedVolumeStoreRejectsCleanupDirectoryAliasesgoldens2842405874/001/external/managed" accepted=true, want false: <nil>
+FAIL
+FAIL	github.com/cocoonstack/sandbox/sandboxd/config	0.035s
+FAIL

@@ -1,0 +1,4 @@
+{"argv": ["umount", "/tmp/sandbox-recovery-disk"], "cwd": "/root/eric/sandbox", "code": 0, "stdout": "", "stderr": ""}
+{"argv": ["blockdev", "--flushbufs", "/dev/loop6"], "cwd": "/root/eric/sandbox", "code": 0, "stdout": "", "stderr": ""}
+{"argv": ["e2fsck", "-f", "-n", "/dev/loop6"], "cwd": "/root/eric/sandbox", "code": 0, "stdout": "Pass 1: Checking inodes, blocks, and sizes\nPass 2: Checking directory structure\nPass 3: Checking directory connectivity\nPass 4: Checking reference counts\nPass 5: Checking group summary information\n/dev/loop6: 254/786432 files (4.7% non-contiguous), 434402/3145728 blocks\n", "stderr": "e2fsck 1.47.2 (1-Jan-2025)\n"}
+{"argv": ["mount", "-o", "nodev,nosuid", "/dev/loop6", "/tmp/sandbox-recovery-disk"], "cwd": "/root/eric/sandbox", "code": 0, "stdout": "", "stderr": ""}

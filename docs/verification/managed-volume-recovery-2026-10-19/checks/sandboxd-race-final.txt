@@ -1,0 +1,28 @@
+ok  	github.com/cocoonstack/sandbox/sandboxd	1.107s
+?   	github.com/cocoonstack/sandbox/sandboxd/archives	[no test files]
+ok  	github.com/cocoonstack/sandbox/sandboxd/archives/archivestest	2.243s
+ok  	github.com/cocoonstack/sandbox/sandboxd/archives/pg	1.040s
+ok  	github.com/cocoonstack/sandbox/sandboxd/config	1.108s
+ok  	github.com/cocoonstack/sandbox/sandboxd/egress	5.705s
+ok  	github.com/cocoonstack/sandbox/sandboxd/engine	5.215s
+ok  	github.com/cocoonstack/sandbox/sandboxd/mesh	2.536s
+?   	github.com/cocoonstack/sandbox/sandboxd/metastore	[no test files]
+?   	github.com/cocoonstack/sandbox/sandboxd/metastore/metastoretest	[no test files]
+?   	github.com/cocoonstack/sandbox/sandboxd/netfilter	[no test files]
+ok  	github.com/cocoonstack/sandbox/sandboxd/outbound	1.736s
+?   	github.com/cocoonstack/sandbox/sandboxd/outbound/outboundtest	[no test files]
+ok  	github.com/cocoonstack/sandbox/sandboxd/pool	5.158s
+?   	github.com/cocoonstack/sandbox/sandboxd/poolset	[no test files]
+ok  	github.com/cocoonstack/sandbox/sandboxd/poolset/pg	1.044s
+ok  	github.com/cocoonstack/sandbox/sandboxd/server	3.985s
+ok  	github.com/cocoonstack/sandbox/sandboxd/store	1.429s
+ok  	github.com/cocoonstack/sandbox/sandboxd/store/dir	1.721s
+ok  	github.com/cocoonstack/sandbox/sandboxd/store/peer	4.028s
+ok  	github.com/cocoonstack/sandbox/sandboxd/store/s3	14.835s
+?   	github.com/cocoonstack/sandbox/sandboxd/store/storetest	[no test files]
+?   	github.com/cocoonstack/sandbox/sandboxd/tenants	[no test files]
+ok  	github.com/cocoonstack/sandbox/sandboxd/tenants/file	1.046s
+ok  	github.com/cocoonstack/sandbox/sandboxd/tenants/pg	1.040s
+?   	github.com/cocoonstack/sandbox/sandboxd/tenants/tenantstest	[no test files]
+ok  	github.com/cocoonstack/sandbox/sandboxd/types	1.045s
+ok  	github.com/cocoonstack/sandbox/sandboxd/utils	1.271s

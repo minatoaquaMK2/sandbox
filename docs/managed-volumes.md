@@ -144,7 +144,7 @@ remain in force.
 
 Each row names observable behavior and the verification level. Real-runtime
 receipts and exact source/binary pins are in the
-[verification record](verification/managed-volumes-2026-10-19.md).
+[fifteen-case recovery verification](verification/managed-volume-recovery-2026-10-19.md).
 
 | Feature | Real-runtime case | Additional source / HTTP evidence |
 | --- | --- | --- |
@@ -160,6 +160,9 @@ receipts and exact source/binary pins are in the
 | Release cancels post-effect catalog attach; both managed delete and catalog writer stay excluded until old VM removal | MV-10 | Cancellation/union fixture and failed-metadata regression tests. |
 | All holders gone before external storage round trip | MV-11 | Registry snapshot and public GET. |
 | Outer ext4 unmount, absence, flush, read-only fsck, remount, same backing identity and guest payload | MV-12 | Loop-backed file on persistent host storage; not host reboot or power-loss proof. |
+| Stopped unclaimed VM does not block startup with an existing managed resource | MV-13 | Dead positive PID, stopped PID zero, unknown metadata, creating collector and ineffective removal controls. |
+| Persisted quarantine resumes removal after restart; ordinary failed claim retains ownership | MV-14 | Seeded failure state and injected runtime removal refusal; source matrix injects registry publication failures. |
+| Reject cleanup-owned directories and symbolic links into managed backing storage before daemon file creation | MV-15 | Eight real-binary refusals; stable data-root/cleanup-root aliases, benign placements and backing-loss regressions. |
 | Catalog symlink alias, post-admission inode replacement, replacement dirty marker | No hostile host race claim | Source regression tests; zero attach effects on rejected replacement. |
 | Failed egress quarantine retirement still fences and attempts removal | No real firewall failure injection | Direct helper test with fake engine. |
 | Corrupt metadata, failed commits, startup safe collector and ancestor ownership | No hardware crash/fsync injection | Source fixtures; failures preserve ownership or reject startup. |
