@@ -22,9 +22,10 @@ registry directory.
 
 Startup rejects managed stores inside `data_dir/readers`, `data_dir/goldens`
 and top-level `data_dir/fork-*` trees before creating files. The check includes
-existing aliases of `data_dir`, `readers` and `goldens`. A store such as
+existing symbolic links at `data_dir`, `readers` and `goldens`. A store such as
 `data_dir/managed-volumes` remains valid. Keep these directories under trusted
-host control; validation cannot prevent a concurrent pathname swap.
+host control; validation does not detect bind-mount aliases or prevent a
+concurrent pathname swap.
 
 ```json
 {

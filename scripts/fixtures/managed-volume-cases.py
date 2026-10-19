@@ -657,10 +657,20 @@ class ManagedCases:
             "fork-persistent/managed",
             "goldens",
             "goldens/managed",
+            "readers-disks-alias",
+            "goldens-disks-alias",
         ):
             fixture = Path(tempfile.mkdtemp(prefix="unsafe-layout-", dir=self.r.case_directory))
             data_dir = fixture / "data"
             unsafe = data_dir / relative
+            alias_marker = None
+            if relative.endswith("-disks-alias"):
+                unsafe = fixture / "managed"
+                (unsafe / "disks").mkdir(parents=True, mode=0o700)
+                alias_marker = unsafe / "disks/preserved.raw"
+                alias_marker.write_bytes(b"preserve backing bytes")
+                data_dir.mkdir()
+                (data_dir / relative.split("-", 1)[0]).symlink_to(unsafe / "disks", target_is_directory=True)
             token = secrets.token_urlsafe(32)
             config = {
                 "listen": "127.0.0.1:0",
@@ -685,13 +695,25 @@ class ManagedCases:
                 "exit_code": result.returncode,
                 "stdout": result.stdout,
                 "stderr": result.stderr,
+                "fixture_directories_precreated": alias_marker is not None,
                 "data_directory_created": data_dir.exists(),
                 "managed_directory_created": unsafe.exists(),
             }
             self.r.receipt("layout-" + relative.replace("/", "-") + ".json", observation)
             assert result.returncode != 0 and "managed_volume_dir" in logs, observation
-            assert not data_dir.exists() and not unsafe.exists(), "unsafe layout created files before refusal"
-            results.append({"layout": relative, "exit_code": result.returncode, "refused_before_files_created": True})
+            if alias_marker is None:
+                assert not data_dir.exists() and not unsafe.exists(), "unsafe layout created files before refusal"
+            else:
+                assert alias_marker.read_bytes() == b"preserve backing bytes", "aliased backing changed"
+                assert not (unsafe / "registry.json").exists(), "unsafe layout created a registry before refusal"
+            results.append(
+                {
+                    "layout": relative,
+                    "exit_code": result.returncode,
+                    "refused_before_daemon_files_created": True,
+                    "preexisting_backing_preserved": True if alias_marker is not None else None,
+                }
+            )
         backing_after = self.disk.stat()
         assert (backing_after.st_dev, backing_after.st_ino, backing_after.st_size) == (
             backing_before.st_dev,
