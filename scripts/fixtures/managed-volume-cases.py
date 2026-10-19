@@ -700,7 +700,8 @@ class ManagedCases:
                 "managed_directory_created": unsafe.exists(),
             }
             self.r.receipt("layout-" + relative.replace("/", "-") + ".json", observation)
-            assert result.returncode != 0 and "managed_volume_dir" in logs, observation
+            diagnostic = "managed volume backing storage" if alias_marker is not None else "managed_volume_dir"
+            assert result.returncode != 0 and diagnostic in logs, observation
             if alias_marker is None:
                 assert not data_dir.exists() and not unsafe.exists(), "unsafe layout created files before refusal"
             else:
