@@ -176,3 +176,50 @@ func TestManagedStoreRejectsSweepOwnedPathsBeforeCreatingFiles(t *testing.T) {
 		})
 	}
 }
+
+func TestManagedStorePreservesBackingWhenCleanupAliasesDisks(t *testing.T) {
+	for _, namespace := range []string{"readers", "goldens"} {
+		t.Run(namespace, func(t *testing.T) {
+			cfg := managedConfig(t)
+			e := newManagedEngine()
+			m := openManagedTest(t, cfg, e)
+			if err := m.Reconcile(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+			v := createManagedTest(t, m, "data")
+			backing := m.managed.path(volumeID(v.ID))
+			f, err := os.OpenFile(backing, os.O_WRONLY, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, writeErr := f.WriteAt([]byte("preserved"), 4096)
+			if err := errors.Join(writeErr, f.Close(), m.Close()); err != nil {
+				t.Fatal(err)
+			}
+			cleanup := filepath.Join(cfg.DataDir, namespace)
+			if err := os.Remove(cleanup); err != nil && !errors.Is(err, os.ErrNotExist) {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(filepath.Join(cfg.ManagedVolumeDir, "disks"), cleanup); err != nil {
+				t.Fatal(err)
+			}
+			next, err := NewManager(t.Context(), cfg, e, testSecrets(t), testBackends(t, cfg))
+			if err == nil {
+				t.Error("constructor accepted cleanup alias into managed backing directory")
+				if err := next.Reconcile(t.Context()); err != nil {
+					t.Errorf("reconcile: %v", err)
+				}
+				next.Close()
+			}
+			f, err = os.Open(backing)
+			if err != nil {
+				t.Fatalf("managed backing lost: %v", err)
+			}
+			defer f.Close()
+			marker := make([]byte, len("preserved"))
+			if _, err := f.ReadAt(marker, 4096); err != nil || string(marker) != "preserved" {
+				t.Fatalf("managed bytes changed: %q %v", marker, err)
+			}
+		})
+	}
+}

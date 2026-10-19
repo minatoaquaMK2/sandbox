@@ -109,3 +109,29 @@ func TestManagedVolumeStoreRejectsCleanupDirectoryAliases(t *testing.T) {
 		})
 	}
 }
+
+func TestManagedVolumeStoreProtectsBackingDirectoryFromCleanupAliases(t *testing.T) {
+	for _, namespace := range []string{"readers", "goldens"} {
+		for _, target := range []string{"disks", "disks/nested", "disks-backup", "work/readers"} {
+			t.Run(namespace+"/"+target, func(t *testing.T) {
+				root := t.TempDir()
+				data := filepath.Join(root, "data")
+				managed := filepath.Join(root, "managed")
+				aliasTarget := filepath.Join(managed, target)
+				for _, dir := range []string{data, aliasTarget} {
+					if err := os.MkdirAll(dir, 0700); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if err := os.Symlink(aliasTarget, filepath.Join(data, namespace)); err != nil {
+					t.Fatal(err)
+				}
+				cfg := Config{DataDir: data, ManagedVolumeDir: managed, APIToken: "root"}
+				allow := target == "disks-backup" || target == "work/readers"
+				if err := cfg.ValidateManagedVolumeStore(); (err == nil) != allow {
+					t.Fatalf("cleanup alias %q accepted=%v, want %v: %v", target, err == nil, allow, err)
+				}
+			})
+		}
+	}
+}
