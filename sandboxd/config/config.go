@@ -436,6 +436,37 @@ func (c *Config) ValidateManagedVolumeStore() error {
 	if c.APIToken == "" {
 		return fmt.Errorf("managed_volume_dir requires a nonempty api_token")
 	}
+	dataDir, err := filepath.Abs(c.DataDir)
+	if err != nil {
+		return fmt.Errorf("resolve data_dir: %w", err)
+	}
+	resolved, err := resolveExistingAncestors(dataDir)
+	if err != nil {
+		return fmt.Errorf("resolve data_dir: %w", err)
+	}
+	for _, root := range []string{dataDir, resolved} {
+		relative, err := filepath.Rel(root, c.ManagedVolumeDir)
+		if err != nil {
+			return fmt.Errorf("compare managed_volume_dir with data_dir: %w", err)
+		}
+		first, _, _ := strings.Cut(relative, string(filepath.Separator))
+		if first == "readers" || first == "goldens" || strings.HasPrefix(first, "fork-") {
+			return fmt.Errorf("managed_volume_dir must be outside data_dir startup cleanup paths (readers, goldens, fork-*)")
+		}
+	}
+	for _, namespace := range []string{"readers", "goldens"} {
+		swept, err := resolveExistingAncestors(filepath.Join(dataDir, namespace))
+		if err != nil {
+			return fmt.Errorf("resolve data_dir cleanup path: %w", err)
+		}
+		relative, err := filepath.Rel(swept, c.ManagedVolumeDir)
+		if err != nil {
+			return fmt.Errorf("compare managed_volume_dir with cleanup path: %w", err)
+		}
+		if relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+			return fmt.Errorf("managed_volume_dir must be outside data_dir %s cleanup path", namespace)
+		}
+	}
 	return nil
 }
 
@@ -678,6 +709,25 @@ func StorageBytes(s string) (int64, error) {
 		s += "B"
 	}
 	return units.RAMInBytes(s)
+}
+
+func resolveExistingAncestors(path string) (string, error) {
+	suffix := ""
+	for {
+		_, err := os.Lstat(path)
+		if err == nil {
+			resolved, err := filepath.EvalSymlinks(path)
+			if err != nil {
+				return "", err
+			}
+			return filepath.Join(resolved, suffix), nil
+		}
+		if !os.IsNotExist(err) || filepath.Dir(path) == path {
+			return "", err
+		}
+		suffix = filepath.Join(filepath.Base(path), suffix)
+		path = filepath.Dir(path)
+	}
 }
 
 func validatePolicy(p *egress.Policy, secrets map[string]struct{}) error {

@@ -2,7 +2,9 @@ package pool
 
 import (
 	"context"
+	"errors"
 	"maps"
+	"os"
 	"strings"
 
 	"github.com/cocoonstack/sandbox/sandboxd/engine"
@@ -49,6 +51,14 @@ func (m *Manager) recoverManagedOrphans(ctx context.Context, claims map[string]*
 			continue
 		}
 		identity, err := r.process(rec.PID)
+		if (rec.PID > 0 && errors.Is(err, os.ErrNotExist)) || (rec.PID == 0 && rec.State == "stopped") {
+			_ = m.eng.Remove(context.WithoutCancel(ctx), name)
+			if !m.confirmGone(ctx, name) {
+				return managedStorageError()
+			}
+			delete(live, name)
+			continue
+		}
 		if err != nil {
 			return managedStorageError()
 		}
