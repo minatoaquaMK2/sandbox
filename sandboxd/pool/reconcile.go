@@ -268,11 +268,13 @@ func (m *Manager) resyncEgress(ctx context.Context, live map[string]types.VMReco
 	}
 }
 
+const egressQuarantineFailure = "sandbox quarantined after egress recovery failure"
+
 // quarantineClaim parks a claim whose teardown failed: out of service and queued until a remove succeeds.
 func (m *Manager) quarantineClaim(ctx context.Context, sb *types.Sandbox) bool {
 	if m.retireManaged(sb.ID) != nil {
 		m.mu.Lock()
-		sb.Failed = "sandbox quarantined after egress recovery failure"
+		sb.Failed = egressQuarantineFailure
 		m.cancelVolumeRun(sb)
 		js := m.store.set(sb)
 		m.mu.Unlock()

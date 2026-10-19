@@ -251,7 +251,7 @@ func (m *Manager) recoverManaged(ctx context.Context, claims map[string]*types.S
 		m.mu.Unlock()
 		sb, exists := claims[h.SandboxID]
 		rec, present := live[h.VMName]
-		valid := exists && sb.VMName == h.VMName && sb.Tenant == h.Tenant && h.State != holdRetiring && present
+		valid := exists && sb.VMName == h.VMName && sb.Tenant == h.Tenant && sb.Failed != egressQuarantineFailure && h.State != holdRetiring && present
 		if valid {
 			identity, err := r.process(rec.PID)
 			if err != nil && !errors.Is(err, os.ErrNotExist) {
