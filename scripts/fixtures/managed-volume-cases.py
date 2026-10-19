@@ -19,9 +19,9 @@ class ManagedCases:
             device = sb.exec(
                 "sh",
                 "-c",
-                "for p in /sys/block/*/serial; do "
+                "for attempt in $(seq 1 200); do for p in /sys/block/*/serial; do "
                 '[ "$(cat "$p")" = "$1" ] && { printf "/dev/%s" "$(basename "$(dirname "$p")")"; exit 0; }; '
-                "done; exit 1",
+                "done; sleep 0.01; done; exit 1",
                 "volume-probe",
                 self.name,
             ).strip()
@@ -523,6 +523,18 @@ class ManagedCases:
                     "release did not reach removal after cancellation",
                 )
                 self.delete(self.name, self.info["id"], status=409)
+                self.api(
+                    "POST",
+                    "/v1/claim",
+                    {
+                        "template": "pv-b:local",
+                        "net": "none",
+                        "size": "small",
+                        "volumes_attach_only": True,
+                        "volumes": [{"name": "catalog", "mode": "rw"}],
+                    },
+                    status=409,
+                )
                 assert Path(f"/proc/{vm['pid']}").exists(), "removal gate did not retain the old VMM"
                 removal_barrier.joinpath("continue").touch()
                 status, reply = releasing.result(timeout=30)
@@ -538,6 +550,7 @@ class ManagedCases:
                 "release_raced_actual_readonly_attach_on_managed_vm": True,
                 "release_cancelled_attach_without_client_disconnect": True,
                 "managed_delete_refused_while_old_vmm_alive": True,
+                "catalog_writer_refused_while_uncertain_attachment_retiring": True,
                 "old_vmm_gone_before_managed_disk_reuse": True,
                 **marker,
             }

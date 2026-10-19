@@ -323,7 +323,9 @@ class Run:
             "sync_claims": True,
             "refill_concurrency": 2,
             "managed_volume_dir": str(self.root / "managed"),
-            "volumes": [{"name": "catalog", "path": str(catalog), "tenants": ["t1"], "directio": "off"}],
+            "volumes": [
+                {"name": "catalog", "path": str(catalog), "tenants": ["t1"], "directio": "off", "writable": True}
+            ],
             "pools": [{"template": f"pv-{v}:local", "net": "none", "size": "small", "warm": 2} for v in ("a", "b")],
         }
         config_path = self.root / "sandboxd.json"
