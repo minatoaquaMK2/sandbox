@@ -1,0 +1,6 @@
+{
+  "root": "/root/eric/sandbox",
+  "origin": "https://github.com/minatoaquaMK2/sandbox.git",
+  "baseline": "f90af50f808377d1cf5aee6f8eab9b3a98004599",
+  "module": "github.com/cocoonstack/sandbox/sandboxd"
+}

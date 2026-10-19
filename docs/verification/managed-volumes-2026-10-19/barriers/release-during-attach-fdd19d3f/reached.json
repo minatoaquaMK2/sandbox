@@ -1,0 +1,1 @@
+{"argv": ["vm", "disk", "attach", "sbx-b3baafc3acba0b7904356992ca27fd4e-c0a98f726e57", "--path", "/tmp/sandbox-managed-disk/run/catalog.raw", "--name", "catalog", "--readonly", "--directio", "off"], "pid": 2807199, "action": "block_after"}

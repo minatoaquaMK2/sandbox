@@ -1,0 +1,614 @@
+{
+  "report": {
+    "verification_attempt": "f40bfe8e5f31b552fcf87e9f38522fb8",
+    "source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+    "sdk_source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+    "sdk_digest": "bd22919002ba7d1300df96d1f811d672da5b165b9392968fa8b30b52e808ec4e",
+    "driver_source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+    "binary_vcs": [
+      "build\tvcs.revision=48324c1f7810bf8eb626f4e461d61a271314a135",
+      "build\tvcs.time=2026-10-19T05:50:27Z",
+      "build\tvcs.modified=false"
+    ],
+    "fixture_sha256": {
+      "verify-managed-volumes.py": "8e835be5155aa90c66090284c7d3c2380fe7784dcb7cfe976406b9edac29447b",
+      "managed-volume-cases.py": "eeddd7c80c6659fcff363200c816acd922343d0de5a8a700374a1adfcf238818",
+      "managed-volume-runtime.py": "109dcb88c13cc6d3bd4636030090cf2be31c77ac95506859d62efe057d3beca0"
+    },
+    "sandboxd_sha256": "dcb2bc8221b031e2fd109100d1c54690e5b9b43c49509ca6ac44d6bd0bbe810d",
+    "cases": [
+      {
+        "id": "MV-01",
+        "result": "Pass",
+        "evidence": {
+          "volume": {
+            "kind": "managed",
+            "id": "vol_11caf641008d1308580ad5fb93a5bc1d",
+            "tenant": "t1",
+            "node": "node113",
+            "state": "ready",
+            "created_at": "2026-10-19T05:50:58.947367029Z",
+            "name": "pv4ad33f96main",
+            "default_mount": "/volumes/pv4ad33f96main",
+            "size_bytes": 21474836480,
+            "available": true,
+            "nodes": 1,
+            "writable": true
+          },
+          "logical_bytes": 21474836480,
+          "allocated_bytes": 0,
+          "backing_inode": 262207,
+          "backing_device": 1798
+        },
+        "verification_attempt": "f40bfe8e5f31b552fcf87e9f38522fb8",
+        "source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "sdk_source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "sdk_digest": "bd22919002ba7d1300df96d1f811d672da5b165b9392968fa8b30b52e808ec4e",
+        "driver_source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "binary_vcs": [
+          "build\tvcs.revision=48324c1f7810bf8eb626f4e461d61a271314a135",
+          "build\tvcs.time=2026-10-19T05:50:27Z",
+          "build\tvcs.modified=false"
+        ],
+        "fixture_sha256": {
+          "verify-managed-volumes.py": "8e835be5155aa90c66090284c7d3c2380fe7784dcb7cfe976406b9edac29447b",
+          "managed-volume-cases.py": "eeddd7c80c6659fcff363200c816acd922343d0de5a8a700374a1adfcf238818",
+          "managed-volume-runtime.py": "109dcb88c13cc6d3bd4636030090cf2be31c77ac95506859d62efe057d3beca0"
+        },
+        "evidence_level": "real VM and service",
+        "sandboxd_sha256": "dcb2bc8221b031e2fd109100d1c54690e5b9b43c49509ca6ac44d6bd0bbe810d"
+      },
+      {
+        "id": "MV-02",
+        "result": "Pass",
+        "evidence": {
+          "identity": "vol_11caf641008d1308580ad5fb93a5bc1d",
+          "different_size_rejected": true,
+          "different_owner_rejected": true
+        },
+        "verification_attempt": "f40bfe8e5f31b552fcf87e9f38522fb8",
+        "source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "sdk_source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "sdk_digest": "bd22919002ba7d1300df96d1f811d672da5b165b9392968fa8b30b52e808ec4e",
+        "driver_source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "binary_vcs": [
+          "build\tvcs.revision=48324c1f7810bf8eb626f4e461d61a271314a135",
+          "build\tvcs.time=2026-10-19T05:50:27Z",
+          "build\tvcs.modified=false"
+        ],
+        "fixture_sha256": {
+          "verify-managed-volumes.py": "8e835be5155aa90c66090284c7d3c2380fe7784dcb7cfe976406b9edac29447b",
+          "managed-volume-cases.py": "eeddd7c80c6659fcff363200c816acd922343d0de5a8a700374a1adfcf238818",
+          "managed-volume-runtime.py": "109dcb88c13cc6d3bd4636030090cf2be31c77ac95506859d62efe057d3beca0"
+        },
+        "evidence_level": "real VM and service",
+        "sandboxd_sha256": "dcb2bc8221b031e2fd109100d1c54690e5b9b43c49509ca6ac44d6bd0bbe810d"
+      },
+      {
+        "id": "MV-03",
+        "result": "Pass",
+        "evidence": {
+          "root_and_owner_visible": true,
+          "foreign_equals_unknown": true,
+          "credential_derived_owner": true
+        },
+        "verification_attempt": "f40bfe8e5f31b552fcf87e9f38522fb8",
+        "source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "sdk_source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "sdk_digest": "bd22919002ba7d1300df96d1f811d672da5b165b9392968fa8b30b52e808ec4e",
+        "driver_source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "binary_vcs": [
+          "build\tvcs.revision=48324c1f7810bf8eb626f4e461d61a271314a135",
+          "build\tvcs.time=2026-10-19T05:50:27Z",
+          "build\tvcs.modified=false"
+        ],
+        "fixture_sha256": {
+          "verify-managed-volumes.py": "8e835be5155aa90c66090284c7d3c2380fe7784dcb7cfe976406b9edac29447b",
+          "managed-volume-cases.py": "eeddd7c80c6659fcff363200c816acd922343d0de5a8a700374a1adfcf238818",
+          "managed-volume-runtime.py": "109dcb88c13cc6d3bd4636030090cf2be31c77ac95506859d62efe057d3beca0"
+        },
+        "evidence_level": "real VM and service",
+        "sandboxd_sha256": "dcb2bc8221b031e2fd109100d1c54690e5b9b43c49509ca6ac44d6bd0bbe810d"
+      },
+      {
+        "id": "MV-04",
+        "result": "Pass",
+        "evidence": {
+          "old_identity": "vol_8f8eecec626dcfe204530ac30d072adb",
+          "replacement_identity": "vol_76448b54ff114b41dff9094c888979bb",
+          "old_delete_cannot_delete_replacement": true
+        },
+        "verification_attempt": "f40bfe8e5f31b552fcf87e9f38522fb8",
+        "source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "sdk_source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "sdk_digest": "bd22919002ba7d1300df96d1f811d672da5b165b9392968fa8b30b52e808ec4e",
+        "driver_source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "binary_vcs": [
+          "build\tvcs.revision=48324c1f7810bf8eb626f4e461d61a271314a135",
+          "build\tvcs.time=2026-10-19T05:50:27Z",
+          "build\tvcs.modified=false"
+        ],
+        "fixture_sha256": {
+          "verify-managed-volumes.py": "8e835be5155aa90c66090284c7d3c2380fe7784dcb7cfe976406b9edac29447b",
+          "managed-volume-cases.py": "eeddd7c80c6659fcff363200c816acd922343d0de5a8a700374a1adfcf238818",
+          "managed-volume-runtime.py": "109dcb88c13cc6d3bd4636030090cf2be31c77ac95506859d62efe057d3beca0"
+        },
+        "evidence_level": "real VM and service",
+        "sandboxd_sha256": "dcb2bc8221b031e2fd109100d1c54690e5b9b43c49509ca6ac44d6bd0bbe810d"
+      },
+      {
+        "id": "MV-05",
+        "result": "Pass",
+        "evidence": {
+          "concurrent_create_statuses": [
+            200,
+            201,
+            200,
+            200
+          ],
+          "one_identity": "vol_e3dd512f9a116d0ac2b38c1ad6e340df",
+          "create_delete_statuses": [
+            200,
+            204
+          ],
+          "delete_claim_statuses": [
+            204,
+            404
+          ],
+          "no_successful_claim_lost_backing": true
+        },
+        "verification_attempt": "f40bfe8e5f31b552fcf87e9f38522fb8",
+        "source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "sdk_source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "sdk_digest": "bd22919002ba7d1300df96d1f811d672da5b165b9392968fa8b30b52e808ec4e",
+        "driver_source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "binary_vcs": [
+          "build\tvcs.revision=48324c1f7810bf8eb626f4e461d61a271314a135",
+          "build\tvcs.time=2026-10-19T05:50:27Z",
+          "build\tvcs.modified=false"
+        ],
+        "fixture_sha256": {
+          "verify-managed-volumes.py": "8e835be5155aa90c66090284c7d3c2380fe7784dcb7cfe976406b9edac29447b",
+          "managed-volume-cases.py": "eeddd7c80c6659fcff363200c816acd922343d0de5a8a700374a1adfcf238818",
+          "managed-volume-runtime.py": "109dcb88c13cc6d3bd4636030090cf2be31c77ac95506859d62efe057d3beca0"
+        },
+        "evidence_level": "real VM and service",
+        "sandboxd_sha256": "dcb2bc8221b031e2fd109100d1c54690e5b9b43c49509ca6ac44d6bd0bbe810d"
+      },
+      {
+        "id": "MV-06",
+        "result": "Pass",
+        "evidence": {
+          "filesystem_uuid": "c7f0873a-a40a-4a19-9141-1e91952ada85",
+          "payload_bytes": 4194304,
+          "marker_sha256": "7757fd4a4a314bb1da6d9a60c0d508ff164060c1bc499151cef33d4c946537ed",
+          "attach_only_preserved_across_live_change_and_restart": true,
+          "formatted_once_explicitly": true
+        },
+        "verification_attempt": "f40bfe8e5f31b552fcf87e9f38522fb8",
+        "source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "sdk_source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "sdk_digest": "bd22919002ba7d1300df96d1f811d672da5b165b9392968fa8b30b52e808ec4e",
+        "driver_source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "binary_vcs": [
+          "build\tvcs.revision=48324c1f7810bf8eb626f4e461d61a271314a135",
+          "build\tvcs.time=2026-10-19T05:50:27Z",
+          "build\tvcs.modified=false"
+        ],
+        "fixture_sha256": {
+          "verify-managed-volumes.py": "8e835be5155aa90c66090284c7d3c2380fe7784dcb7cfe976406b9edac29447b",
+          "managed-volume-cases.py": "eeddd7c80c6659fcff363200c816acd922343d0de5a8a700374a1adfcf238818",
+          "managed-volume-runtime.py": "109dcb88c13cc6d3bd4636030090cf2be31c77ac95506859d62efe057d3beca0"
+        },
+        "evidence_level": "real VM and service",
+        "sandboxd_sha256": "dcb2bc8221b031e2fd109100d1c54690e5b9b43c49509ca6ac44d6bd0bbe810d"
+      },
+      {
+        "id": "MV-07",
+        "result": "Pass",
+        "evidence": {
+          "id": "sb_4525326ed4fe53ce",
+          "vm_id": "53KPJCG4PEPNSEMDUUHT7KVB5I",
+          "vmm_pid": 2801336,
+          "before_pool": [
+            {
+              "key": {
+                "template": "pv-a:local",
+                "net": "none",
+                "size": "small"
+              },
+              "warm": 2,
+              "refilling": 0,
+              "target": 2,
+              "golden": true
+            },
+            {
+              "key": {
+                "template": "pv-b:local",
+                "net": "none",
+                "size": "small"
+              },
+              "warm": 2,
+              "refilling": 0,
+              "target": 2,
+              "golden": true
+            }
+          ],
+          "warm_metric_before": 0.0,
+          "warm_metric_after": 1.0,
+          "conflict": {
+            "error": "volume is held by a sandbox",
+            "code": "volume_busy",
+            "volume": "pv4ad33f96main",
+            "holders": [
+              {
+                "sandbox_id": "sb_4525326ed4fe53ce",
+                "mode": "rw",
+                "state": "claimed"
+              }
+            ]
+          },
+          "marker_sha256": "7757fd4a4a314bb1da6d9a60c0d508ff164060c1bc499151cef33d4c946537ed",
+          "filesystem_uuid": "c7f0873a-a40a-4a19-9141-1e91952ada85"
+        },
+        "verification_attempt": "f40bfe8e5f31b552fcf87e9f38522fb8",
+        "source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "sdk_source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "sdk_digest": "bd22919002ba7d1300df96d1f811d672da5b165b9392968fa8b30b52e808ec4e",
+        "driver_source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "binary_vcs": [
+          "build\tvcs.revision=48324c1f7810bf8eb626f4e461d61a271314a135",
+          "build\tvcs.time=2026-10-19T05:50:27Z",
+          "build\tvcs.modified=false"
+        ],
+        "fixture_sha256": {
+          "verify-managed-volumes.py": "8e835be5155aa90c66090284c7d3c2380fe7784dcb7cfe976406b9edac29447b",
+          "managed-volume-cases.py": "eeddd7c80c6659fcff363200c816acd922343d0de5a8a700374a1adfcf238818",
+          "managed-volume-runtime.py": "109dcb88c13cc6d3bd4636030090cf2be31c77ac95506859d62efe057d3beca0"
+        },
+        "evidence_level": "real VM and service",
+        "sandboxd_sha256": "dcb2bc8221b031e2fd109100d1c54690e5b9b43c49509ca6ac44d6bd0bbe810d"
+      },
+      {
+        "id": "MV-08",
+        "result": "Pass",
+        "evidence": {
+          "restart_matrix": [
+            {
+              "sync_claims": "false",
+              "fresh_claim_before_crash": true,
+              "same_vmm_pid_and_start": true,
+              "marker_sha256": "7757fd4a4a314bb1da6d9a60c0d508ff164060c1bc499151cef33d4c946537ed",
+              "filesystem_uuid": "c7f0873a-a40a-4a19-9141-1e91952ada85"
+            },
+            {
+              "sync_claims": "true",
+              "fresh_claim_before_crash": true,
+              "same_vmm_pid_and_start": true,
+              "marker_sha256": "7757fd4a4a314bb1da6d9a60c0d508ff164060c1bc499151cef33d4c946537ed",
+              "filesystem_uuid": "c7f0873a-a40a-4a19-9141-1e91952ada85"
+            }
+          ]
+        },
+        "verification_attempt": "f40bfe8e5f31b552fcf87e9f38522fb8",
+        "source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "sdk_source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "sdk_digest": "bd22919002ba7d1300df96d1f811d672da5b165b9392968fa8b30b52e808ec4e",
+        "driver_source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "binary_vcs": [
+          "build\tvcs.revision=48324c1f7810bf8eb626f4e461d61a271314a135",
+          "build\tvcs.time=2026-10-19T05:50:27Z",
+          "build\tvcs.modified=false"
+        ],
+        "fixture_sha256": {
+          "verify-managed-volumes.py": "8e835be5155aa90c66090284c7d3c2380fe7784dcb7cfe976406b9edac29447b",
+          "managed-volume-cases.py": "eeddd7c80c6659fcff363200c816acd922343d0de5a8a700374a1adfcf238818",
+          "managed-volume-runtime.py": "109dcb88c13cc6d3bd4636030090cf2be31c77ac95506859d62efe057d3beca0"
+        },
+        "evidence_level": "real VM and service",
+        "sandboxd_sha256": "dcb2bc8221b031e2fd109100d1c54690e5b9b43c49509ca6ac44d6bd0bbe810d"
+      },
+      {
+        "id": "MV-09",
+        "result": "Pass",
+        "evidence": {
+          "template": "b",
+          "old_vm": "JPDPY4DJWVULDMMN4625QW33IT",
+          "new_vm": "KT5N2LD4UTHEGZB2YT2PPXY22I",
+          "marker_sha256": "7757fd4a4a314bb1da6d9a60c0d508ff164060c1bc499151cef33d4c946537ed",
+          "filesystem_uuid": "c7f0873a-a40a-4a19-9141-1e91952ada85"
+        },
+        "verification_attempt": "f40bfe8e5f31b552fcf87e9f38522fb8",
+        "source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "sdk_source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "sdk_digest": "bd22919002ba7d1300df96d1f811d672da5b165b9392968fa8b30b52e808ec4e",
+        "driver_source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "binary_vcs": [
+          "build\tvcs.revision=48324c1f7810bf8eb626f4e461d61a271314a135",
+          "build\tvcs.time=2026-10-19T05:50:27Z",
+          "build\tvcs.modified=false"
+        ],
+        "fixture_sha256": {
+          "verify-managed-volumes.py": "8e835be5155aa90c66090284c7d3c2380fe7784dcb7cfe976406b9edac29447b",
+          "managed-volume-cases.py": "eeddd7c80c6659fcff363200c816acd922343d0de5a8a700374a1adfcf238818",
+          "managed-volume-runtime.py": "109dcb88c13cc6d3bd4636030090cf2be31c77ac95506859d62efe057d3beca0"
+        },
+        "evidence_level": "real VM and service",
+        "sandboxd_sha256": "dcb2bc8221b031e2fd109100d1c54690e5b9b43c49509ca6ac44d6bd0bbe810d"
+      },
+      {
+        "id": "MV-10",
+        "result": "Pass",
+        "evidence": {
+          "release_raced_actual_readonly_attach_on_managed_vm": true,
+          "release_cancelled_attach_without_client_disconnect": true,
+          "managed_delete_refused_while_old_vmm_alive": true,
+          "catalog_writer_refused_while_uncertain_attachment_retiring": true,
+          "old_vmm_gone_before_managed_disk_reuse": true,
+          "marker_sha256": "7757fd4a4a314bb1da6d9a60c0d508ff164060c1bc499151cef33d4c946537ed",
+          "filesystem_uuid": "c7f0873a-a40a-4a19-9141-1e91952ada85"
+        },
+        "verification_attempt": "f40bfe8e5f31b552fcf87e9f38522fb8",
+        "source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "sdk_source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "sdk_digest": "bd22919002ba7d1300df96d1f811d672da5b165b9392968fa8b30b52e808ec4e",
+        "driver_source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "binary_vcs": [
+          "build\tvcs.revision=48324c1f7810bf8eb626f4e461d61a271314a135",
+          "build\tvcs.time=2026-10-19T05:50:27Z",
+          "build\tvcs.modified=false"
+        ],
+        "fixture_sha256": {
+          "verify-managed-volumes.py": "8e835be5155aa90c66090284c7d3c2380fe7784dcb7cfe976406b9edac29447b",
+          "managed-volume-cases.py": "eeddd7c80c6659fcff363200c816acd922343d0de5a8a700374a1adfcf238818",
+          "managed-volume-runtime.py": "109dcb88c13cc6d3bd4636030090cf2be31c77ac95506859d62efe057d3beca0"
+        },
+        "evidence_level": "real VM and service",
+        "sandboxd_sha256": "dcb2bc8221b031e2fd109100d1c54690e5b9b43c49509ca6ac44d6bd0bbe810d"
+      },
+      {
+        "id": "MV-11",
+        "result": "Pass",
+        "evidence": {
+          "name": "pv4ad33f96main",
+          "id": "vol_11caf641008d1308580ad5fb93a5bc1d",
+          "path": "/tmp/sandbox-managed-disk/run/managed/disks/vol_11caf641008d1308580ad5fb93a5bc1d.raw",
+          "inode": 262207,
+          "device": 1798,
+          "size": 21474836480,
+          "filesystem_uuid": "c7f0873a-a40a-4a19-9141-1e91952ada85",
+          "payload_sha256": "7757fd4a4a314bb1da6d9a60c0d508ff164060c1bc499151cef33d4c946537ed"
+        },
+        "verification_attempt": "f40bfe8e5f31b552fcf87e9f38522fb8",
+        "source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "sdk_source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "sdk_digest": "bd22919002ba7d1300df96d1f811d672da5b165b9392968fa8b30b52e808ec4e",
+        "driver_source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "binary_vcs": [
+          "build\tvcs.revision=48324c1f7810bf8eb626f4e461d61a271314a135",
+          "build\tvcs.time=2026-10-19T05:50:27Z",
+          "build\tvcs.modified=false"
+        ],
+        "fixture_sha256": {
+          "verify-managed-volumes.py": "8e835be5155aa90c66090284c7d3c2380fe7784dcb7cfe976406b9edac29447b",
+          "managed-volume-cases.py": "eeddd7c80c6659fcff363200c816acd922343d0de5a8a700374a1adfcf238818",
+          "managed-volume-runtime.py": "109dcb88c13cc6d3bd4636030090cf2be31c77ac95506859d62efe057d3beca0"
+        },
+        "evidence_level": "real VM and service",
+        "sandboxd_sha256": "dcb2bc8221b031e2fd109100d1c54690e5b9b43c49509ca6ac44d6bd0bbe810d"
+      },
+      {
+        "id": "MV-12",
+        "result": "Pass",
+        "evidence": {
+          "outer_uuid": "13c02ce8-d9c6-45ff-ba40-f4878992e225",
+          "normal_unmount": true,
+          "mount_absent_observed": true,
+          "read_only_fsck": "Pass 1: Checking inodes, blocks, and sizes\nPass 2: Checking directory structure\nPass 3: Checking directory connectivity\nPass 4: Checking reference counts\nPass 5: Checking group summary information\n/dev/loop6: 237/786432 files (7.6% non-contiguous), 515284/3145728 blocks\n",
+          "same_loop_backing": "/root/eric/.sandbox-managed-volumes-20261019/storage.ext4",
+          "host_reboot": false,
+          "power_loss": false,
+          "same_resource_and_backing_after_outer_remount": true,
+          "marker_sha256": "7757fd4a4a314bb1da6d9a60c0d508ff164060c1bc499151cef33d4c946537ed",
+          "filesystem_uuid": "c7f0873a-a40a-4a19-9141-1e91952ada85"
+        },
+        "verification_attempt": "f40bfe8e5f31b552fcf87e9f38522fb8",
+        "source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "sdk_source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "sdk_digest": "bd22919002ba7d1300df96d1f811d672da5b165b9392968fa8b30b52e808ec4e",
+        "driver_source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+        "binary_vcs": [
+          "build\tvcs.revision=48324c1f7810bf8eb626f4e461d61a271314a135",
+          "build\tvcs.time=2026-10-19T05:50:27Z",
+          "build\tvcs.modified=false"
+        ],
+        "fixture_sha256": {
+          "verify-managed-volumes.py": "8e835be5155aa90c66090284c7d3c2380fe7784dcb7cfe976406b9edac29447b",
+          "managed-volume-cases.py": "eeddd7c80c6659fcff363200c816acd922343d0de5a8a700374a1adfcf238818",
+          "managed-volume-runtime.py": "109dcb88c13cc6d3bd4636030090cf2be31c77ac95506859d62efe057d3beca0"
+        },
+        "evidence_level": "real VM and service",
+        "sandboxd_sha256": "dcb2bc8221b031e2fd109100d1c54690e5b9b43c49509ca6ac44d6bd0bbe810d"
+      }
+    ],
+    "passed": 12,
+    "failed": 0
+  },
+  "environment": {
+    "source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+    "sandboxd_sha256": "dcb2bc8221b031e2fd109100d1c54690e5b9b43c49509ca6ac44d6bd0bbe810d",
+    "runtime_sha256": "26d9e8a8d5594496c14dd67f15138c72940ed04b3ffcf25676cd34382879e634",
+    "hypervisor_version": "cloud-hypervisor v54.0.0",
+    "hypervisor_sha256": "3fe80a8fd7f3fb2a2a59bbcfa50dea6fe8c3c301004c5a4fd91208383cfcb457",
+    "rootfs_sha256": "4da536f6057740c9b472973cc45c9d6b8418aaf810d7df7879a0ff6af1b0e93e",
+    "rootfs_layers_sha256": {
+      "/root/eric/.sandbox-managed-volumes-20261019/layer-1.tar": "f8961a496a5510810a2c38d6791178acd622bbc1006ae96620a4922f26e77a60",
+      "/root/eric/.sandbox-managed-volumes-20261019/layer-2.tar": "f9496ad353017b6ec17668cb1ea8ee9adb04763db69d492845bc7e8c316a4408",
+      "/root/eric/.sandbox-managed-volumes-20261019/layer-3.tar": "89b200335e84419dd80a296a1fdf82a77a00b4f310cd85a57bd966ee8cc8bd7c"
+    },
+    "guest_kernel": "6.18.37",
+    "host_kernel": "7.0.0-38-generic",
+    "host_filesystem": "ext2/ext3",
+    "templates": [
+      {
+        "id": "sha256:53adec038ea702d9f0618cffee07c636a9dcf5f56e903cd13c53333536d58025",
+        "name": "pv-a:local",
+        "type": "oci",
+        "size": 168321352,
+        "created_at": "2026-10-19T05:50:39.861119193Z"
+      },
+      {
+        "id": "sha256:a172697d5a139d46365885511202da0b0eaab64ee4aeb0acbd94c2d6d3448a32",
+        "name": "pv-b:local",
+        "type": "oci",
+        "size": 168321352,
+        "created_at": "2026-10-19T05:50:40.922558562Z"
+      }
+    ]
+  },
+  "artifacts": {
+    "MV-01/http.jsonl": {
+      "sha256": "78a17171d33aeaa40a3fd36b3079da24e9dd4337e0c923a934cad489a5968b38",
+      "bytes": 1292
+    },
+    "MV-01/result.json": {
+      "sha256": "c71353a5eca88287fa8922725249fa22ef8519fc02184e72c78a8c2d6401788c",
+      "bytes": 1534
+    },
+    "MV-02/http.jsonl": {
+      "sha256": "7357dfec61234cb0d29cc720494669e59b32dc6940dbe8174efc829d53f984eb",
+      "bytes": 3438
+    },
+    "MV-02/result.json": {
+      "sha256": "1418bc9ce3ea9640c6ea745406d73a8b2fa7598c0e4e29f8be6cae936dabb0a2",
+      "bytes": 1142
+    },
+    "MV-03/http.jsonl": {
+      "sha256": "9f70c17c3c231cbc7d22c81de6c66fec04e4e2ac8a841e61bbde84c865ce811d",
+      "bytes": 15798
+    },
+    "MV-03/result.json": {
+      "sha256": "36be53a625f41e39900ed37894f61c726bb5a8674f2e349e77dd59ab0ce15e98",
+      "bytes": 1121
+    },
+    "MV-04/http.jsonl": {
+      "sha256": "281ccc5acb8b437aea7b0090fa041b603cbce37750b9e15618b13c6a68df0a8c",
+      "bytes": 13166
+    },
+    "MV-04/result.json": {
+      "sha256": "2c1049258d2446262a5a5b9ef9dbe0965ab00c8ead186c523c0965fdc50d7efd",
+      "bytes": 1189
+    },
+    "MV-05/http.jsonl": {
+      "sha256": "9f13faf36ee46e905d6194c74e58aecb845bfa90e734b398263de367ee6556cd",
+      "bytes": 11810
+    },
+    "MV-05/result.json": {
+      "sha256": "6d676d04ff1faa1d4c950f5173eb7e9f3c8fc16b50c5f9023a60a5387c7ba0a5",
+      "bytes": 1322
+    },
+    "MV-06/guest.jsonl": {
+      "sha256": "6aa99d7fdfb2f923078b725ace99b6a1a2839ec3a019b3a5232ef405e56cef8b",
+      "bytes": 12270
+    },
+    "MV-06/http.jsonl": {
+      "sha256": "89796bdfbfd3f2b816e4a161c542df4f7a91f6af2a47dd75a220f2d9a9024600",
+      "bytes": 1299
+    },
+    "MV-06/result.json": {
+      "sha256": "e701881a104aa3a4889d2475aa5c2db1e9b5cb92d94eb4396df2f161885c01f9",
+      "bytes": 1298
+    },
+    "MV-07/guest.jsonl": {
+      "sha256": "2bd2e93f4e9a93efe097be3b434ab58099181c20d4730714bbc062f74bbc86cd",
+      "bytes": 4175
+    },
+    "MV-07/http.jsonl": {
+      "sha256": "beff1aa6f0665e4c352515a6326fa54f5ae61a384db18134b2f8b5ac5fd39b79",
+      "bytes": 4981
+    },
+    "MV-07/result.json": {
+      "sha256": "1a33d1fe54ad32674f88c5c24d77d5c1aa9b84b1954bc530635a845b213f3c3b",
+      "bytes": 2070
+    },
+    "MV-08/guest.jsonl": {
+      "sha256": "0e1f146a74bf12cf3e3109310c57cc88881fc32432a7f032793f9fa6a4d8dc98",
+      "bytes": 4156
+    },
+    "MV-08/http.jsonl": {
+      "sha256": "75483c9a6cd5b9c58773917187a138f5f239211b8fa1d1e9474cee9cc351e05b",
+      "bytes": 10404
+    },
+    "MV-08/result.json": {
+      "sha256": "3cadd021463135df2dcce50e085b986079d999452e6914ced94a04c2c0fde121",
+      "bytes": 1620
+    },
+    "MV-09/guest.jsonl": {
+      "sha256": "77c9b8d7726eac0701c78ac55a81874084c6c2b4860e2846f23e90206e31713e",
+      "bytes": 3061
+    },
+    "MV-09/result.json": {
+      "sha256": "45695eacd8b207770e06fff56095ef01c336f2674ddadaca42ccea0178b463e0",
+      "bytes": 1272
+    },
+    "MV-10/cancelled-attach.json": {
+      "sha256": "1e582de5dc4139bb1ebd2d4a91c7fdb1f92304446bb17804623c960e7e3f8345",
+      "bytes": 1388
+    },
+    "MV-10/guest.jsonl": {
+      "sha256": "3169ec9435cef8d72ee5d9b4a1eee8aa7c488d2e5dec6888268739eacee19b21",
+      "bytes": 2078
+    },
+    "MV-10/http.jsonl": {
+      "sha256": "bcb9f8ccce2b72b3ced8bb5c62c053214e76a7f2c69ee24ea742c6f23f91a41d",
+      "bytes": 4547
+    },
+    "MV-10/result.json": {
+      "sha256": "e31452f6ce6fadc2d3d59d213197c1c8ac1f2d0a193510c22854e330e13f4b98",
+      "bytes": 1471
+    },
+    "MV-11/result.json": {
+      "sha256": "666dc2c235a5a9794f0139b17b5fb11bbeea57ccc4ff4a2c675b22ae35557bdc",
+      "bytes": 1410
+    },
+    "MV-12/guest.jsonl": {
+      "sha256": "de2b8a1c47aa37e514b97ff0cabe3246529ab8b273631edadc5d59fd9dd65245",
+      "bytes": 2078
+    },
+    "MV-12/result.json": {
+      "sha256": "cc39ee84773f52373edd49066bcffdb8db39fa5fb901fd1b8f3391b8a52003ef",
+      "bytes": 1783
+    }
+  },
+  "artifacts_directory": "managed-volumes-2026-10-19",
+  "additional_artifacts": {
+    "cleanup.json": {
+      "sha256": "c8a28082dce3a5cfa2fcefbca54ede7d21741c245cc17db9e2c42d4fc714d009",
+      "bytes": 758
+    },
+    "storage-roundtrip.json": {
+      "sha256": "12b32e42e8d6d23d116c4f0396bbbf9ea816dce17bba3a9c1b4085cff2b0c8a3",
+      "bytes": 550
+    },
+    "storage-commands.jsonl": {
+      "sha256": "42bc69b421e11a65b61c5debb32ef1d61b4d81cf00ceeef11654f0589d60f42b",
+      "bytes": 811
+    },
+    "storage-checkpoint.json": {
+      "sha256": "732e3f8b1a924e658d8d94a836630a151731d9ac2870531431ce71b6c610552a",
+      "bytes": 1205
+    },
+    "host-storage.json": {
+      "sha256": "ec1dde191c77d80ab10b176c9ab0d4bac32d5da08bbd0b5d6f5cdf9b0cc4849d",
+      "bytes": 2297
+    },
+    "barriers/release-during-attach-fdd19d3f/reached.json": {
+      "sha256": "ab739c831ba07adb8d93a9165099b7b2b23d19fc86284dc4d512b5263890810c",
+      "bytes": 240
+    },
+    "barriers/release-after-cancel-622f80e8/reached.json": {
+      "sha256": "f1996f15ff5f1686bca3840aa222afa8527886f041e12af01ff0639a1a0cfc52",
+      "bytes": 122
+    }
+  }
+}

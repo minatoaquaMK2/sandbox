@@ -1,0 +1,66 @@
+{
+  "id": "MV-07",
+  "result": "Pass",
+  "evidence": {
+    "id": "sb_4525326ed4fe53ce",
+    "vm_id": "53KPJCG4PEPNSEMDUUHT7KVB5I",
+    "vmm_pid": 2801336,
+    "before_pool": [
+      {
+        "key": {
+          "template": "pv-a:local",
+          "net": "none",
+          "size": "small"
+        },
+        "warm": 2,
+        "refilling": 0,
+        "target": 2,
+        "golden": true
+      },
+      {
+        "key": {
+          "template": "pv-b:local",
+          "net": "none",
+          "size": "small"
+        },
+        "warm": 2,
+        "refilling": 0,
+        "target": 2,
+        "golden": true
+      }
+    ],
+    "warm_metric_before": 0.0,
+    "warm_metric_after": 1.0,
+    "conflict": {
+      "error": "volume is held by a sandbox",
+      "code": "volume_busy",
+      "volume": "pv4ad33f96main",
+      "holders": [
+        {
+          "sandbox_id": "sb_4525326ed4fe53ce",
+          "mode": "rw",
+          "state": "claimed"
+        }
+      ]
+    },
+    "marker_sha256": "7757fd4a4a314bb1da6d9a60c0d508ff164060c1bc499151cef33d4c946537ed",
+    "filesystem_uuid": "c7f0873a-a40a-4a19-9141-1e91952ada85"
+  },
+  "verification_attempt": "f40bfe8e5f31b552fcf87e9f38522fb8",
+  "source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+  "sdk_source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+  "sdk_digest": "bd22919002ba7d1300df96d1f811d672da5b165b9392968fa8b30b52e808ec4e",
+  "driver_source": "48324c1f7810bf8eb626f4e461d61a271314a135",
+  "binary_vcs": [
+    "build\tvcs.revision=48324c1f7810bf8eb626f4e461d61a271314a135",
+    "build\tvcs.time=2026-10-19T05:50:27Z",
+    "build\tvcs.modified=false"
+  ],
+  "fixture_sha256": {
+    "verify-managed-volumes.py": "8e835be5155aa90c66090284c7d3c2380fe7784dcb7cfe976406b9edac29447b",
+    "managed-volume-cases.py": "eeddd7c80c6659fcff363200c816acd922343d0de5a8a700374a1adfcf238818",
+    "managed-volume-runtime.py": "109dcb88c13cc6d3bd4636030090cf2be31c77ac95506859d62efe057d3beca0"
+  },
+  "evidence_level": "real VM and service",
+  "sandboxd_sha256": "dcb2bc8221b031e2fd109100d1c54690e5b9b43c49509ca6ac44d6bd0bbe810d"
+}
