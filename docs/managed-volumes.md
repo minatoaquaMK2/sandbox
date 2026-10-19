@@ -20,6 +20,12 @@ existing ancestor must be owned by root or the daemon user. The daemon creates
 private `disks/`, `registry.json` and `lock` entries; it exclusively locks the
 registry directory.
 
+Startup rejects managed stores inside `data_dir/readers`, `data_dir/goldens`
+and top-level `data_dir/fork-*` trees before creating files. The check includes
+existing aliases of `data_dir`, `readers` and `goldens`. A store such as
+`data_dir/managed-volumes` remains valid. Keep these directories under trusted
+host control; validation cannot prevent a concurrent pathname swap.
+
 ```json
 {
   "api_token": "replace-with-your-root-token",
@@ -125,6 +131,13 @@ A failed egress recovery fences the claim and attempts VM removal even if
 managed retirement persistence fails. A stubborn VM or unavailable registry
 can keep the hold for operator recovery. This phase does not promise that an
 uncooperative VMM can always be killed.
+
+After restart, the persisted egress-quarantine failure marker resumes retirement
+and removal. Ordinary failed claims keep their existing ownership until release.
+Unclaimed stopped VM records with no live process are removed before startup
+continues. Unreadable process metadata and unconfirmed removal still block
+startup. The stale-create collector and recorded process-generation checks
+remain in force.
 
 ## Feature map
 

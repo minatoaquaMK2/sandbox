@@ -4,7 +4,9 @@ import hashlib
 import json
 import secrets
 import signal
+import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -118,6 +120,9 @@ class ManagedCases:
             ("MV-08", self.restart_writer),
             ("MV-09", self.replacement),
             ("MV-10", self.release_during_attach),
+            ("MV-13", self.stopped_orphan),
+            ("MV-14", self.seeded_quarantine),
+            ("MV-15", self.unsafe_layout),
             ("MV-11", self.checkpoint),
         ):
             self.r.record(case_id, action)
@@ -335,11 +340,6 @@ class ManagedCases:
         }
 
     def restart_writer(self):
-        from importlib.util import module_from_spec, spec_from_file_location
-
-        spec = spec_from_file_location("pv_driver", Path(__file__).resolve().parents[1] / "verify-managed-volumes.py")
-        module = module_from_spec(spec)
-        spec.loader.exec_module(module)
         results = []
         for sync in ("false", "true"):
             self.sb.close()
@@ -347,11 +347,13 @@ class ManagedCases:
             self.r.restart()
             self.sb = self.claim()
             vm = self.vm(self.sb)
-            identity = module.process_identity(vm["pid"])
+            identity = self.r.process_identity(vm["pid"])
+            assert identity is not None
             self.r.stop("sandboxd", signal.SIGKILL)
             self.r.restart()
             current = self.vm(self.sb)
-            assert current["id"] == vm["id"] and module.process_identity(current["pid"]) == identity
+            after_identity = self.r.process_identity(current["pid"])
+            assert current["id"] == vm["id"] and after_identity == identity
             marker = self.inspect_marker(self.sb)
             status, conflict = self.r.api(
                 "POST",
@@ -367,7 +369,16 @@ class ManagedCases:
             assert status == 409 and self.sb.id in json.dumps(conflict), (status, conflict)
             assert self.create(self.name, 20, status=200)["id"] == self.info["id"]
             results.append(
-                {"sync_claims": sync, "fresh_claim_before_crash": True, "same_vmm_pid_and_start": True, **marker}
+                {
+                    "sync_claims": sync,
+                    "sandbox_id": self.sb.id,
+                    "vm_id": vm["id"],
+                    "vmm_before": identity,
+                    "vmm_after": after_identity,
+                    "fresh_claim_before_crash": True,
+                    "same_vmm_pid_and_start": True,
+                    **marker,
+                }
             )
         return {"restart_matrix": results}
 
@@ -472,6 +483,232 @@ class ManagedCases:
         barrier_id = name + "-" + secrets.token_hex(4)
         path.write_text(json.dumps({"id": barrier_id, "prefix": prefix, "action": action}))
         return self.r.root / "artifacts/barriers" / barrier_id
+
+    def owned_vm(self, vm):
+        assert vm["config"]["name"].startswith("sbx-")
+        assert vm["socket_path"].startswith(str(self.r.root / "run") + "/"), "VM is outside the owned runtime"
+        return {
+            "vm_id": vm["id"],
+            "vm_name": vm["config"]["name"],
+            "state": vm["state"],
+            "reported_pid": vm.get("pid", 0),
+            "process": self.r.process_identity(vm["pid"]) if vm.get("pid", 0) > 0 else None,
+        }
+
+    def stopped_orphan(self):
+        assert self.client.get_volume(self.name)["id"] == self.info["id"]
+        self.r.stop("sandboxd")
+        self.r.require_stopped("sandboxd")
+        name = "sbx-proof-orphan-" + self.r.state["run_id"] + "-" + secrets.token_hex(4)
+        vm = json.loads(
+            self.r.cocoon(
+                "vm",
+                "run",
+                "--name",
+                name,
+                "--output",
+                "json",
+                "--cpu",
+                "1",
+                "--memory",
+                "512MiB",
+                "--no-direct-io=true",
+                "--no-balloon",
+                "--nics",
+                "0",
+                "pv-a:local",
+            )
+        )
+        running = self.owned_vm(vm)
+        assert running["vm_name"] == name and running["process"] is not None
+        claims = json.loads((self.r.root / "state/claims.json").read_text())
+        registry = json.loads((self.r.root / "managed/registry.json").read_text())
+        assert registry["volumes"] and not any(row["vm_name"] == name for row in claims.values())
+        assert not any(hold.get("vm_name") == name for hold in registry["holds"].values())
+        self.r.receipt("orphan-before-stop.json", {"unclaimed": True, "managed_resource_exists": True, **running})
+        self.r.cocoon("vm", "stop", "--force", name)
+        self.wait_for(lambda: self.r.process_identity(vm["pid"]) is None, "stopped orphan VMM process remains")
+        stopped = next(
+            v for v in json.loads(self.r.cocoon("vm", "list", "--format", "json")) if v["config"]["name"] == name
+        )
+        stopped = self.owned_vm(stopped)
+        assert stopped["state"] == "stopped" and stopped["process"] is None, stopped
+        self.r.receipt("orphan-before-restart.json", stopped)
+        self.r.restart()
+        assert not any(v["config"]["name"] == name for v in json.loads(self.r.cocoon("vm", "list", "--format", "json")))
+        assert self.client.get_volume(self.name)["id"] == self.info["id"]
+        return {
+            "running": running,
+            "stopped": stopped,
+            "startup_ready_with_existing_managed_resource": True,
+            "stopped_unclaimed_record_collected": True,
+        }
+
+    def seeded_quarantine(self):
+        ordinary_name = self.prefix + "ctrl"
+        ordinary_volume = self.create(ordinary_name)
+        ordinary = self.claim(name=ordinary_name, mount=False)
+        quarantined = self.claim()
+        ordinary_vm, quarantined_vm = self.vm(ordinary), self.vm(quarantined)
+        ordinary_before, quarantined_before = self.owned_vm(ordinary_vm), self.owned_vm(quarantined_vm)
+        assert ordinary_before["process"] is not None and quarantined_before["process"] is not None
+        self.r.stop("sandboxd")
+        self.r.require_stopped("sandboxd")
+        registry_path = self.r.root / "managed/registry.json"
+        registry_before = registry_path.read_bytes()
+        registry = json.loads(registry_before)
+        assert registry["holds"][quarantined.id]["state"] == "claimed"
+        assert registry["holds"][ordinary.id]["state"] == "claimed"
+        self.r.seed_claim_failures(
+            {
+                quarantined.id: "sandbox quarantined after egress recovery failure",
+                ordinary.id: "ordinary failure requiring explicit release",
+            }
+        )
+        assert registry_path.read_bytes() == registry_before, "seeding changed durable managed ownership"
+        barrier = self.fault(
+            "quarantine-remove-refused", ["vm", "rm", "--force", quarantined_vm["config"]["name"]], "fail"
+        )
+        try:
+            self.r.restart()
+            self.wait_for(lambda: (barrier / "reached.json").exists(), "quarantine recovery did not retry removal")
+            live = self.r.process_identity(quarantined_vm["pid"])
+            assert live == quarantined_before["process"], "refused removal did not retain the original VMM"
+            volume = self.api("GET", self.path())["volume"]
+            assert any(h["sandbox_id"] == quarantined.id and h["state"] == "retiring" for h in volume["holders"]), (
+                volume
+            )
+            writer = {
+                "template": "pv-b:local",
+                "net": "none",
+                "size": "small",
+                "volumes": [{"name": self.name, "mode": "rw"}],
+            }
+            self.api("POST", "/v1/claim", writer, status=409)
+            self.delete(self.name, self.info["id"], status=409)
+            assert self.r.process_identity(ordinary_vm["pid"]) == ordinary_before["process"], (
+                "ordinary failed VM was removed"
+            )
+            ordinary_info = self.api("GET", self.path(ordinary_name))["volume"]
+            assert any(h["sandbox_id"] == ordinary.id and h["state"] == "claimed" for h in ordinary_info["holders"]), (
+                ordinary_info
+            )
+            self.api("POST", "/v1/claim", {**writer, "volumes": [{"name": ordinary_name, "mode": "rw"}]}, status=409)
+            self.r.receipt(
+                "removal-refused.json",
+                {
+                    "seeded_failure_state": True,
+                    "injected_runtime_remove_refusal": True,
+                    "actual_egress_fault": False,
+                    "registry_fsync_fault": False,
+                    "quarantined_before": quarantined_before,
+                    "quarantined_while_refused": live,
+                    "ordinary_before": ordinary_before,
+                    "ordinary_after_restart": self.r.process_identity(ordinary_vm["pid"]),
+                    "runtime_fault": json.loads((barrier / "reached.json").read_text()),
+                },
+            )
+            (self.r.root / "cocoon-fault.json").unlink()
+            self.wait_for(
+                lambda: self.r.process_identity(quarantined_vm["pid"]) is None,
+                "quarantined VMM survived successful removal retry",
+                timeout=90,
+            )
+            assert not any(
+                v["config"]["name"] == quarantined_vm["config"]["name"]
+                for v in json.loads(self.r.cocoon("vm", "list", "--format", "json"))
+            )
+            self.wait_for(
+                lambda: not self.client.get_volume(self.name).get("holders"),
+                "removed quarantine retained its managed hold",
+            )
+            assert self.r.process_identity(ordinary_vm["pid"]) == ordinary_before["process"], (
+                "ordinary failed control did not survive recovery"
+            )
+            with self.claim(template="b") as replacement:
+                marker = self.inspect_marker(replacement)
+            ordinary.close()
+            self.delete(ordinary_name, ordinary_volume["id"])
+            return {
+                "seeded_failure_state": True,
+                "injected_runtime_remove_refusal": True,
+                "actual_egress_fault": False,
+                "registry_fsync_fault": False,
+                "claimed_registry_preserved_during_seeding": True,
+                "sync_claims": json.loads((self.r.root / "sandboxd.json").read_text())["sync_claims"],
+                "writer_and_delete_refused_until_original_vmm_gone": True,
+                "ordinary_failed_control_kept_alive_until_explicit_release": True,
+                "quarantined_process_before": quarantined_before["process"],
+                "quarantined_process_after": self.r.process_identity(quarantined_vm["pid"]),
+                **marker,
+            }
+        finally:
+            (self.r.root / "cocoon-fault.json").unlink(missing_ok=True)
+
+    def unsafe_layout(self):
+        registry_path = self.r.root / "managed/registry.json"
+        registry_before = hashlib.sha256(registry_path.read_bytes()).hexdigest()
+        backing_before = self.disk.stat()
+        results = []
+        for relative in (
+            "readers",
+            "readers/managed",
+            "fork-persistent",
+            "fork-persistent/managed",
+            "goldens",
+            "goldens/managed",
+        ):
+            fixture = Path(tempfile.mkdtemp(prefix="unsafe-layout-", dir=self.r.case_directory))
+            data_dir = fixture / "data"
+            unsafe = data_dir / relative
+            token = secrets.token_urlsafe(32)
+            config = {
+                "listen": "127.0.0.1:0",
+                "data_dir": str(data_dir),
+                "managed_volume_dir": str(unsafe),
+                "api_token": token,
+                "cocoon_bin": "/bin/false",
+                "pools": [],
+            }
+            path = fixture / "sandboxd.json"
+            path.write_text(json.dumps(config))
+            path.chmod(0o600)
+            result = subprocess.run(
+                [str(self.r.root / "bin/sandboxd"), "-config", str(path)], capture_output=True, text=True, timeout=15
+            )
+            logs = result.stdout + result.stderr
+            assert not any(secret in logs for secret in [token, *self.r.state["tokens"].values()]), (
+                "startup log contains a bearer token"
+            )
+            observation = {
+                "layout": relative,
+                "exit_code": result.returncode,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+                "data_directory_created": data_dir.exists(),
+                "managed_directory_created": unsafe.exists(),
+            }
+            self.r.receipt("layout-" + relative.replace("/", "-") + ".json", observation)
+            assert result.returncode != 0 and "managed_volume_dir" in logs, observation
+            assert not data_dir.exists() and not unsafe.exists(), "unsafe layout created files before refusal"
+            results.append({"layout": relative, "exit_code": result.returncode, "refused_before_files_created": True})
+        backing_after = self.disk.stat()
+        assert (backing_after.st_dev, backing_after.st_ino, backing_after.st_size) == (
+            backing_before.st_dev,
+            backing_before.st_ino,
+            backing_before.st_size,
+        )
+        assert hashlib.sha256(registry_path.read_bytes()).hexdigest() == registry_before
+        assert self.client.get_volume(self.name)["id"] == self.info["id"]
+        with self.claim(template="b") as existing:
+            marker = self.inspect_marker(existing)
+        return {
+            "unsafe_layouts": results,
+            "existing_managed_registry_and_backing_unchanged": True,
+            "no_bearer_in_startup_logs": True,
+            "fixture_runtime_command": "/bin/false",
+            **marker,
+        }
 
     def wait_for(self, predicate, explanation, timeout=30):
         deadline = time.monotonic() + timeout

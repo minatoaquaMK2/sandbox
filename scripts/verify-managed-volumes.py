@@ -20,6 +20,7 @@ import urllib.request
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
+CASE_IDS = tuple(f"MV-{number:02d}" for number in range(1, 16))
 
 
 def process_identity(pid):
@@ -64,6 +65,67 @@ class Run:
     def save(self):
         self.manifest_path.write_text(json.dumps(self.state, indent=2) + "\n")
         self.manifest_path.chmod(0o600)
+
+    def process_identity(self, pid):
+        return process_identity(pid)
+
+    def require_stopped(self, role):
+        owned = self.state["processes"][role]
+        current = process_identity(owned["pid"])
+        if current is None:
+            return
+        if current["start"] == owned["start"] and Path(f"/proc/{owned['pid']}/stat").read_text().split()[2] == "Z":
+            return
+        raise RuntimeError(f"owned {role} must be stopped before editing its state")
+
+    def receipt(self, name, evidence):
+        document = {
+            **self.provenance(),
+            "sandboxd_sha256": self.state["sandboxd_sha256"],
+            **evidence,
+        }
+        raw = json.dumps(document, indent=2) + "\n"
+        assert not any(token in raw for token in self.state["tokens"].values()), "receipt contains a bearer token"
+        (self.case_directory / name).write_text(raw)
+
+    def seed_claim_failures(self, failures):
+        self.require_stopped("sandboxd")
+        config = json.loads((self.root / "sandboxd.json").read_text())
+        assert Path(config["data_dir"]).resolve() == self.root / "state"
+        path = self.root / "state/claims.json"
+        before = path.read_bytes()
+        claims = json.loads(before)
+        assert set(failures).issubset({claim["id"] for claim in self.state["claims"]}), "unowned claim seed requested"
+        changes = []
+        for sandbox_id, failure in failures.items():
+            row = claims[sandbox_id]
+            assert row["id"] == sandbox_id and row["vm_name"].startswith("sbx-")
+            assert not row.get("failed"), "failure-state seed requires a healthy original claim"
+            changes.append(
+                {"sandbox_id": sandbox_id, "vm_name": row["vm_name"], "before": row.get("failed", ""), "after": failure}
+            )
+            row["failed"] = failure
+        raw = (json.dumps(claims, indent=2) + "\n").encode()
+        temporary = path.with_name("claims.json.verification.tmp")
+        with temporary.open("xb") as out:
+            out.write(raw)
+            out.flush()
+            os.fsync(out.fileno())
+        temporary.replace(path)
+        descriptor = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        self.receipt(
+            "seeded-failures.json",
+            {
+                "method": "offline owned claim journal edit",
+                "changes": changes,
+                "before_sha256": hashlib.sha256(before).hexdigest(),
+                "after_sha256": hashlib.sha256(raw).hexdigest(),
+            },
+        )
 
     def command(self, argv, *, timeout=180, cwd=None):
         actual_cwd = cwd or self.args.source_root
@@ -115,6 +177,7 @@ class Run:
             "driver_source": verification.get("driver_source"),
             "binary_vcs": verification.get("binary_vcs"),
             "fixture_sha256": verification.get("fixture_sha256"),
+            "case_ids": verification.get("case_ids"),
         }
 
     def cocoon(self, *args):
@@ -468,6 +531,7 @@ class Run:
 
     def assert_binding(self):
         expected = self.state["verification"]
+        assert expected["case_ids"] == list(CASE_IDS), "verification case registry changed"
         assert self.command(["git", "rev-parse", "HEAD"]).strip() == expected["driver_source"]
         assert not self.command(["git", "status", "--porcelain", "--untracked-files=no"]).strip()
         assert self.sdk_digest() == expected["sdk_digest"], "SDK changed during verification"
@@ -499,6 +563,7 @@ class Run:
             "sdk_digest": self.sdk_digest(),
             "binary_vcs": [line.strip() for line in build.splitlines() if "vcs." in line],
             "fixture_sha256": self.fixture_hashes(),
+            "case_ids": list(CASE_IDS),
         }
         self.save()
         self.environment()
@@ -569,9 +634,7 @@ class Run:
     def report(self):
         self.assert_binding()
         verification = self.state["verification"]
-        results = [
-            json.loads((self.root / "artifacts" / f"MV-{n:02d}" / "result.json").read_text()) for n in range(1, 13)
-        ]
+        results = [json.loads((self.root / "artifacts" / case_id / "result.json").read_text()) for case_id in CASE_IDS]
         assert all(
             r["result"] == "Pass"
             and r["verification_attempt"] == verification["attempt"]
