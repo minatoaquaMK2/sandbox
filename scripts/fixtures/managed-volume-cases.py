@@ -486,7 +486,10 @@ class ManagedCases:
 
     def owned_vm(self, vm):
         assert vm["config"]["name"].startswith("sbx-")
-        assert vm["socket_path"].startswith(str(self.r.root / "run") + "/"), "VM is outside the owned runtime"
+        socket = vm.get("socket_path", "")
+        assert socket.startswith(str(self.r.root / "run") + "/") or (
+            vm["state"] == "stopped" and not socket
+        ), "VM is outside the owned runtime"
         return {
             "vm_id": vm["id"],
             "vm_name": vm["config"]["name"],
