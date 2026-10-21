@@ -265,7 +265,14 @@ func (r *volumeRegistry) verify(v managedVolume) error {
 		return err
 	}
 	actual, err := inspectBacking(r.path(v.ID))
-	if errors.Is(err, os.ErrNotExist) || err == nil && (v.Backing.Inode == 0 || actual != v.Backing || actual.Size != v.Size) {
+	if errors.Is(err, os.ErrNotExist) {
+		// a directory renamed between the check and the open must stay a transient error
+		if dirErr := r.verifyDirectories(); dirErr != nil {
+			return dirErr
+		}
+		return errBackingMismatch
+	}
+	if err == nil && (v.Backing.Inode == 0 || actual != v.Backing || actual.Size != v.Size) {
 		return errBackingMismatch
 	}
 	return err
