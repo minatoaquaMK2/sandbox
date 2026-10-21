@@ -357,8 +357,13 @@ func (m *Manager) managedInfos(tenant string) []types.VolumeInfo {
 	}
 	r.mu.Unlock()
 	for i, v := range volumes {
-		if v.State == volumeReady && r.verify(v) != nil {
-			infos[i].State = string(volumeRecovery)
+		if v.State != volumeReady {
+			continue
+		}
+		if err := r.verify(v); err != nil {
+			if errors.Is(err, errBackingMismatch) {
+				infos[i].State = string(volumeRecovery)
+			}
 			infos[i].Available = false
 		}
 	}
