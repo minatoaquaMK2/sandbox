@@ -405,13 +405,14 @@ func TestManagedGrowthAdmissionSerializesOrdinaryReleaseAndReap(t *testing.T) {
 		resumeGrowth()
 		finishReap()
 	}()
+	// the reap worker's releases block until its body returns, so this proves it ran during growth
+	finishReap()
 	if _, ok := m.Sandbox(sb.ID); !ok {
 		t.Fatal("reap dropped grow owner")
 	}
 	if err := resumeGrowth(); err != nil {
 		t.Fatal(err)
 	}
-	finishReap()
 	startGrowthTestReap(t, m)()
 	if _, ok := m.Sandbox(sb.ID); ok {
 		t.Fatal("expiry retained claim after growth completed")
