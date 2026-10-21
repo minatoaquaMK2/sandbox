@@ -254,3 +254,27 @@ func TestDurableClaimBarrierRewritesLatestAlreadyWrittenRows(t *testing.T) {
 		t.Fatalf("durable barrier did not rewrite latest credentials: %v %v", got, err)
 	}
 }
+
+func TestDurableClaimBarrierSkipsWhatIsAlreadyDurable(t *testing.T) {
+	s := newClaimStore(t.TempDir(), false)
+	syncs := 0
+	s.syncDirectory = func(string) error { syncs++; return nil }
+	s.set(&types.Sandbox{ID: "sb_a", Key: testKey})
+	for range 2 {
+		if err := s.commitDurable(s.mark()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if syncs != 1 {
+		t.Fatalf("two barriers over one change fsynced %d times, want 1", syncs)
+	}
+	if err := s.commit(s.set(&types.Sandbox{ID: "sb_b", Key: testKey})); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.commitDurable(s.mark()); err != nil {
+		t.Fatal(err)
+	}
+	if syncs != 2 {
+		t.Fatalf("barrier after an unsynced write fsynced %d times in total, want 2", syncs)
+	}
+}

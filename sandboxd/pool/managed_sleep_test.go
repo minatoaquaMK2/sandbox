@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -269,6 +270,27 @@ func TestManagedSleepRoundTripAndExclusiveHold(t *testing.T) {
 	}
 	if len(e.restores) != 1 || len(e.hooks) != 2 || e.hooks[0].Operation != e.hooks[1].Operation {
 		t.Fatalf("effects restores=%v hooks=%v", e.restores, e.hooks)
+	}
+}
+
+func TestManagedSleepSkipsDurableClaimWritesThatChangeNothing(t *testing.T) {
+	m, _, sb, _ := newSleepTest(t)
+	var syncs atomic.Int32
+	m.store.syncDirectory = func(string) error { syncs.Add(1); return nil }
+	requireSleep(t, m, sb)
+	before := syncs.Load()
+	if err := m.Hibernate(t.Context(), sb.ID, Cred{Token: sb.Token}); err != nil {
+		t.Fatal(err)
+	}
+	if got := syncs.Load() - before; got != 0 {
+		t.Fatalf("hibernate of a sleeping sandbox fsynced claims %d times, want 0", got)
+	}
+	before = syncs.Load()
+	if err := m.Wake(t.Context(), sb.ID, Cred{Token: sb.Token}); err != nil {
+		t.Fatal(err)
+	}
+	if got := syncs.Load() - before; got != 1 {
+		t.Fatalf("wake fsynced claims %d times, want 1", got)
 	}
 }
 
