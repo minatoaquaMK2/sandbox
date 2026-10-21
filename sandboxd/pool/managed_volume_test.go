@@ -596,3 +596,19 @@ func TestManagedStalledAttachDoesNotBlockOtherClaims(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestManagedListReportsLostDirectoryAsUnavailableNotRecovery(t *testing.T) {
+	cfg := managedConfig(t)
+	m := openManagedTest(t, cfg, newManagedEngine())
+	createManagedTest(t, m, "data")
+	disks := filepath.Join(cfg.ManagedVolumeDir, "disks")
+	if err := os.Rename(disks, disks+".aside"); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Rename(disks+".aside", disks) }()
+	for _, info := range m.Volumes("t1", nil) {
+		if info.Name == "data" && (info.Available || info.State != "ready") {
+			t.Fatalf("lost directory listed as state=%q available=%v, want ready and unavailable like GET's storage error", info.State, info.Available)
+		}
+	}
+}
