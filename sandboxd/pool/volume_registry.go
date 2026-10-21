@@ -119,7 +119,10 @@ type volumeRegistry struct {
 	process           func(int) (processIdentity, error)
 }
 
-var errBackingMismatch = errors.New("managed backing is missing or changed")
+var (
+	errBackingMismatch  = errors.New("managed backing is missing or changed")
+	errManagedDirectory = errors.New("managed directory changed")
+)
 
 var managedIDPattern = regexp.MustCompile(`^vol_[0-9a-f]{32}$`)
 
@@ -261,21 +264,28 @@ func backingDeviceID[T ~uint64 | ~int32](device T) uint64 {
 }
 
 func (r *volumeRegistry) verify(v managedVolume) error {
-	if err := r.verifyDirectories(); err != nil {
+	actual, err := r.inspectManaged(r.path(v.ID))
+	if errors.Is(err, errManagedDirectory) {
 		return err
 	}
-	actual, err := inspectBacking(r.path(v.ID))
-	if errors.Is(err, os.ErrNotExist) {
-		// a directory renamed between the check and the open must stay a transient error
-		if dirErr := r.verifyDirectories(); dirErr != nil {
-			return dirErr
-		}
-		return errBackingMismatch
-	}
-	if err == nil && (v.Backing.Inode == 0 || actual != v.Backing || actual.Size != v.Size) {
+	if errors.Is(err, os.ErrNotExist) || err == nil && (v.Backing.Inode == 0 || actual != v.Backing || actual.Size != v.Size) {
 		return errBackingMismatch
 	}
 	return err
+}
+
+func (r *volumeRegistry) inspectManaged(path string) (backingIdentity, error) {
+	if err := r.verifyDirectories(); err != nil {
+		return backingIdentity{}, errors.Join(errManagedDirectory, err)
+	}
+	actual, err := inspectBacking(path)
+	if errors.Is(err, os.ErrNotExist) {
+		// a directory renamed between the check and the open must stay a transient error
+		if dirErr := r.verifyDirectories(); dirErr != nil {
+			return actual, errors.Join(errManagedDirectory, dirErr)
+		}
+	}
+	return actual, err
 }
 
 func (r *volumeRegistry) validate() error {

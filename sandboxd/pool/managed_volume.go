@@ -239,14 +239,10 @@ func (m *Manager) DeleteVolume(ctx context.Context, name, expected, tenant strin
 		return &VolumeError{Status: 409, Code: volumeBusyCode, Message: volumeBusyMessage, Volume: name, Holders: holders}
 	}
 	r.mu.Unlock()
-	dirErr := r.verifyDirectories()
 	path := r.path(id)
-	actual, err := inspectBacking(path)
-	if dirErr == nil && errors.Is(err, os.ErrNotExist) {
-		dirErr = r.verifyDirectories()
-	}
+	actual, err := r.inspectManaged(path)
 	r.mu.Lock()
-	if dirErr != nil {
+	if errors.Is(err, errManagedDirectory) {
 		return managedStorageError()
 	}
 	if holders := r.holders(v.ID); len(holders) > 0 {
