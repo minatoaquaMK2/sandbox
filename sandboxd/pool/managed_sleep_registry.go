@@ -84,6 +84,7 @@ func (r *volumeRegistry) commitManagedSleep(h volumeHold, next *managedSleep) er
 	}
 	r.data.Holds[h.SandboxID] = h
 	if err := r.commitAndRelock(); err != nil {
+		// clearing the sleep record opens guest access, so it must not outrun the disk
 		if next == nil {
 			h.Sleep = current.Sleep
 			r.data.Holds[h.SandboxID] = h
