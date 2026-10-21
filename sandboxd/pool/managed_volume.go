@@ -242,6 +242,9 @@ func (m *Manager) DeleteVolume(ctx context.Context, name, expected, tenant strin
 	dirErr := r.verifyDirectories()
 	path := r.path(id)
 	actual, err := inspectBacking(path)
+	if dirErr == nil && errors.Is(err, os.ErrNotExist) {
+		dirErr = r.verifyDirectories()
+	}
 	r.mu.Lock()
 	if dirErr != nil {
 		return managedStorageError()
