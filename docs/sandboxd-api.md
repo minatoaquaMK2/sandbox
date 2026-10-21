@@ -238,7 +238,8 @@ calling tenant at its own `max_claims`, or the node draining; 500
 provisioning failed. Managed volumes use the managed volume error body: a
 volume that is growing returns 409 `volume_busy` with its public holder list;
 a missing or replaced backing returns 503 `volume_recovery_required` without
-`Retry-After`; unavailable managed storage returns 503
+`Retry-After`, except while a hibernate or an unresolved growth owns the
+volume, when it is a storage error; unavailable managed storage returns 503
 `volume_storage_unavailable` with `Retry-After`.
 
 ## GET /v1/volumes
