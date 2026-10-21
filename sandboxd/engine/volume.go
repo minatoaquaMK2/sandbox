@@ -71,8 +71,19 @@ func (e *Engine) MountVolume(ctx context.Context, vsockSocket, name, mount strin
 	return e.mountDevice(ctx, vsockSocket, device, name, mount, rw)
 }
 
-// UnmountVolume flushes and detaches a guest mount before the VM is removed.
-func (e *Engine) UnmountVolume(ctx context.Context, vsockSocket, mount string) error {
+// UnmountVolume unmounts name's device at mount and proves it has no other guest mount; a stacked, foreign, or bind mount is refused, never popped.
+func (e *Engine) UnmountVolume(ctx context.Context, vsockSocket, name, mount string) error {
+	device, found, err := e.findVolumeDevice(ctx, vsockSocket, name)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("volume device %s not found; cannot prove %s unmounted", name, mount)
+	}
+	return e.unmountLiveVolume(ctx, vsockSocket, device, mount)
+}
+
+func (e *Engine) umount(ctx context.Context, vsockSocket, mount string) error {
 	ctx, cancel := context.WithTimeout(ctx, VolumeCallTimeout)
 	defer cancel()
 	if err := e.silkdExec(ctx, vsockSocket, "umount", "--", mount); err != nil {

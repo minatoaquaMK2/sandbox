@@ -88,7 +88,7 @@ func (e *Engine) unmountLiveVolume(ctx context.Context, vsockSocket, device, mou
 	target := e.resolveMount(ctx, vsockSocket, mount, mounts)
 	atTarget := slices.DeleteFunc(mounts, func(m volumeMount) bool { return m.path != target })
 	if len(atTarget) == 1 && atTarget[0].devNum == devNum && atTarget[0].root == "/" {
-		if err = e.UnmountVolume(ctx, vsockSocket, mount); err != nil {
+		if err = e.umount(ctx, vsockSocket, mount); err != nil {
 			if _, ok := errors.AsType[*guestExitError](err); ok {
 				return &VolumeMountConflict{Message: fmt.Sprintf("cannot unmount %q; close guest references and retry", mount)}
 			}

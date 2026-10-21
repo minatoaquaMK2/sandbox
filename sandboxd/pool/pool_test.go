@@ -1668,7 +1668,7 @@ func (f *fakeEngine) DetachVolume(ctx context.Context, _, sock, name, mount stri
 		return err
 	}
 	if mount != "" {
-		if err := f.UnmountVolume(ctx, sock, mount); err != nil {
+		if err := f.UnmountVolume(ctx, sock, name, mount); err != nil {
 			return err
 		}
 	}
@@ -1678,7 +1678,7 @@ func (f *fakeEngine) DetachVolume(ctx context.Context, _, sock, name, mount stri
 	return f.detachVolumeErr
 }
 
-func (f *fakeEngine) UnmountVolume(_ context.Context, _, mount string) error {
+func (f *fakeEngine) UnmountVolume(_ context.Context, _, _, mount string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.volumeOps = append(f.volumeOps, "umount:"+mount)

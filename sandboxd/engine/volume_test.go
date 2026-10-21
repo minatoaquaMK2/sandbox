@@ -142,8 +142,19 @@ func TestUnmountVolumeExecsBoundedUmount(t *testing.T) {
 	}
 	path := sockPath(t)
 	fake := serveFakeSilkd(t, path)
+	configureVolumeDevices(fake)
+	mounted := rootMountInfo + "2 1 8:32 / /datasets/training rw - ext4 /dev/vdc rw\n"
+	fake.mu.Lock()
+	fake.serial["/sys/block/vdc/dev"] = []byte("8:32\n")
+	fake.serial["/proc/self/mountinfo"] = []byte(mounted)
+	fake.execHook = func(argv []string) {
+		if argv[0] == "umount" {
+			fake.serial["/proc/self/mountinfo"] = []byte(rootMountInfo)
+		}
+	}
+	fake.mu.Unlock()
 	e := New("cocoon", nil, nil, false, false, "")
-	if err := e.UnmountVolume(t.Context(), path, "/datasets/training"); err != nil {
+	if err := e.UnmountVolume(t.Context(), path, "imagenet", "/datasets/training"); err != nil {
 		t.Fatalf("UnmountVolume: %v", err)
 	}
 
@@ -152,11 +163,25 @@ func TestUnmountVolumeExecsBoundedUmount(t *testing.T) {
 	if !slices.EqualFunc(fake.execCalls, wantExec, slices.Equal) {
 		t.Errorf("exec calls = %v, want %v", fake.execCalls, wantExec)
 	}
+	fake.serial["/proc/self/mountinfo"] = []byte(mounted)
 	fake.execCode, fake.execFailAt = 32, 2
 	fake.mu.Unlock()
-	err := e.UnmountVolume(t.Context(), path, "/datasets/training")
-	if err == nil || !strings.Contains(err.Error(), "unmount volume /datasets/training") {
-		t.Errorf("got %v, want umount failure", err)
+	err := e.UnmountVolume(t.Context(), path, "imagenet", "/datasets/training")
+	if conflict, ok := errors.AsType[*VolumeMountConflict](err); !ok || !strings.HasPrefix(conflict.Error(), "cannot unmount") {
+		t.Errorf("got %v, want a busy unmount conflict", err)
+	}
+
+	fake.mu.Lock()
+	delete(fake.serial, "/sys/block/vdc/serial")
+	calls := len(fake.execCalls)
+	fake.mu.Unlock()
+	if err := e.UnmountVolume(t.Context(), path, "imagenet", "/datasets/training"); err == nil {
+		t.Error("unmounted a volume whose device the guest no longer shows")
+	}
+	fake.mu.Lock()
+	defer fake.mu.Unlock()
+	if len(fake.execCalls) != calls {
+		t.Errorf("ran %v without the volume device", fake.execCalls[calls:])
 	}
 }
 
@@ -168,7 +193,7 @@ func TestUnmountVolumeRefusesStackedMount(t *testing.T) {
 	fake.serial["/sys/block/vdc/dev"] = []byte("8:32\n")
 	fake.serial["/proc/self/mountinfo"] = []byte(rootMountInfo + "2 1 8:32 / /data rw - ext4 /dev/vdc rw\n3 2 0:39 / /data rw - tmpfs guesttmp rw\n")
 	fake.mu.Unlock()
-	err := New("cocoon", nil, nil, false, false, "").UnmountVolume(t.Context(), sock, "/data")
+	err := New("cocoon", nil, nil, false, false, "").UnmountVolume(t.Context(), sock, "imagenet", "/data")
 	if conflict, ok := errors.AsType[*VolumeMountConflict](err); !ok || !strings.Contains(conflict.Error(), `"/data"`) {
 		t.Fatalf("unmount under a stacked mount = %v, want a conflict naming /data", err)
 	}

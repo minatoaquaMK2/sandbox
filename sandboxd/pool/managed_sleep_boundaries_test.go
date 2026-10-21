@@ -162,10 +162,10 @@ type sleepUnmountGate struct {
 	entered, resume chan struct{}
 }
 
-func (e *sleepUnmountGate) UnmountVolume(ctx context.Context, sock, mount string) error {
+func (e *sleepUnmountGate) UnmountVolume(ctx context.Context, sock, name, mount string) error {
 	close(e.entered)
 	<-e.resume
-	return e.sleepTestEngine.UnmountVolume(ctx, sock, mount)
+	return e.sleepTestEngine.UnmountVolume(ctx, sock, name, mount)
 }
 
 func TestManagedSleepTeardownRefusesRenewal(t *testing.T) {
