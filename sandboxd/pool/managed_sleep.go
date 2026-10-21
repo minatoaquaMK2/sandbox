@@ -374,15 +374,23 @@ func (m *Manager) resumeManagedSleep(ctx context.Context, sb *types.Sandbox, h v
 	return nil
 }
 
-func (m *Manager) pauseManagedSleep(sb *types.Sandbox, h volumeHold) claimSnapshot {
+func (m *Manager) pauseManagedSleep(sb *types.Sandbox, h volumeHold) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	projectSleepState(sb, h.Sleep)
-	return m.store.set(sb)
+	m.store.set(sb)
 }
 
 func (m *Manager) projectManagedSleep(sb *types.Sandbox, h volumeHold) error {
-	if err := m.store.commitDurable(m.pauseManagedSleep(sb, h)); err != nil {
+	m.mu.Lock()
+	before := [3]any{sb.HibernateSnap, sb.PendingSnap, sb.ReaderSafe}
+	projectSleepState(sb, h.Sleep)
+	js := m.store.mark()
+	if before != [3]any{sb.HibernateSnap, sb.PendingSnap, sb.ReaderSafe} {
+		js = m.store.set(sb)
+	}
+	m.mu.Unlock()
+	if err := m.store.commitDurable(js); err != nil {
 		return fmt.Errorf("persist managed sleep: %w", err)
 	}
 	return nil

@@ -85,6 +85,7 @@ type claimStore struct {
 	rows    map[string]*claimRow
 	seq     uint64
 	written uint64
+	durable uint64
 
 	recommitting atomic.Bool
 }
@@ -173,7 +174,7 @@ func (s *claimStore) commitSnapshot(snap claimSnapshot, durable bool) error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 	s.mu.Lock()
-	if !durable && snap.seq <= s.written {
+	if snap.seq <= s.written && (!durable || snap.seq <= s.durable) {
 		s.mu.Unlock()
 		return nil
 	}
@@ -199,6 +200,9 @@ func (s *claimStore) commitSnapshot(snap claimSnapshot, durable bool) error {
 	}
 	s.mu.Lock()
 	s.written = seq
+	if durable || s.sync {
+		s.durable = seq
+	}
 	s.mu.Unlock()
 	return nil
 }
