@@ -3,6 +3,7 @@ package sandbox
 import (
 	"context"
 	"encoding/json/v2"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -226,12 +227,12 @@ func TestWithVolumesEncodesMode(t *testing.T) {
 	}
 }
 
-func TestWithVolumesAttachOnlySendsFlagAndDecodesMountlessEcho(t *testing.T) {
+func TestWithVolumesAttachOnlySendsFlagAndDecodesExplicitEcho(t *testing.T) {
 	var raw struct {
 		Volumes           []map[string]any `json:"volumes"`
 		VolumesAttachOnly bool             `json:"volumes_attach_only"`
 	}
-	echo := []Volume{{Name: "imagenet"}, {Name: "scratch", Mode: "rw"}}
+	echo := []Volume{{Name: "imagenet", AttachOnly: true}, {Name: "scratch", Mode: "rw", AttachOnly: true}}
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := json.UnmarshalRead(r.Body, &raw); err != nil {
 			t.Errorf("decode body: %v", err)
@@ -241,7 +242,7 @@ func TestWithVolumesAttachOnlySendsFlagAndDecodesMountlessEcho(t *testing.T) {
 	t.Cleanup(ts.Close)
 
 	sb, err := testClient(t, ts).New(t.Context(), "rt:24.04",
-		WithVolumes(Volume{Name: "imagenet"}, Volume{Name: "scratch", Mode: "rw"}),
+		WithVolumes(Volume{Name: "imagenet", AttachOnly: true}, Volume{Name: "scratch", Mode: "rw"}),
 		WithVolumesAttachOnly())
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -253,6 +254,9 @@ func TestWithVolumesAttachOnlySendsFlagAndDecodesMountlessEcho(t *testing.T) {
 		if mount, present := entry["mount"]; present {
 			t.Errorf("volume %v carries mount %v, want none", entry["name"], mount)
 		}
+	}
+	if raw.Volumes[0]["attach_only"] != true {
+		t.Error("claim-wide option removed per-entry attach_only")
 	}
 	if !slices.Equal(sb.Volumes, echo) {
 		t.Errorf("volumes = %+v, want %+v", sb.Volumes, echo)
@@ -301,7 +305,7 @@ func TestRejectsInvalidVolumeModeLocally(t *testing.T) {
 }
 
 func TestSandboxVolumesEchoMode(t *testing.T) {
-	want := []Volume{{Name: "imagenet"}, {Name: "scratch", Mode: "rw"}}
+	want := []Volume{{Name: "imagenet", Mount: "/volumes/imagenet"}, {Name: "scratch", Mount: "/volumes/scratch", Mode: "rw"}}
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.MarshalWrite(w, claimResponse{ID: "sb_1", Token: "tok", Volumes: want})
 	}))
@@ -313,5 +317,64 @@ func TestSandboxVolumesEchoMode(t *testing.T) {
 	}
 	if !slices.Equal(sb.Volumes, want) {
 		t.Errorf("volumes = %+v, want %+v", sb.Volumes, want)
+	}
+}
+
+func TestPerEntryAttachOnlyClaims(t *testing.T) {
+	for _, promoted := range []bool{false, true} {
+		for _, mixed := range []bool{false, true} {
+			t.Run(fmt.Sprintf("promoted=%t/mixed=%t", promoted, mixed), func(t *testing.T) {
+				volumes := []Volume{{Name: "device-ro", AttachOnly: true}, {Name: "device-rw", Mode: "rw", AttachOnly: true}}
+				if mixed {
+					volumes = append(volumes, Volume{Name: "mounted-ro", AttachOnly: false})
+				}
+				before := slices.Clone(volumes)
+				var got claimRequest
+				ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if err := json.UnmarshalRead(r.Body, &got); err != nil {
+						t.Errorf("decode claim: %v", err)
+					}
+					_ = json.MarshalWrite(w, claimResponse{ID: "sb_1", Token: "tok", Volumes: got.Volumes})
+				}))
+				t.Cleanup(ts.Close)
+				c := testClient(t, ts)
+				option := WithVolumes(volumes...)
+				for range 2 {
+					var sb *Sandbox
+					var err error
+					if promoted {
+						tpl := &Template{Name: "task:v1", c: c, addr: c.addr, net: "none", size: "small"}
+						sb, err = tpl.New(t.Context(), option)
+					} else {
+						sb, err = c.New(t.Context(), "rt:24.04", option)
+					}
+					if err != nil {
+						t.Fatal(err)
+					}
+					if got.VolumesAttachOnly || !slices.Equal(got.Volumes, before) || !slices.Equal(sb.Volumes, before) || !slices.Equal(volumes, before) {
+						t.Fatalf("claim=%+v reply=%+v input=%+v want=%+v", got, sb.Volumes, volumes, before)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestPerEntryAttachOnlyRejectsClaimMount(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Error("invalid claim reached server") }))
+	t.Cleanup(ts.Close)
+	c := testClient(t, ts)
+	for _, promoted := range []bool{false, true} {
+		var err error
+		option := WithVolumes(Volume{Name: "data", Mount: "/data", AttachOnly: true})
+		if promoted {
+			tpl := &Template{Name: "task:v1", c: c, addr: c.addr}
+			_, err = tpl.New(t.Context(), option)
+		} else {
+			_, err = c.New(t.Context(), "rt:24.04", option)
+		}
+		if err == nil || !strings.Contains(err.Error(), "meaningless with attach_only") {
+			t.Fatalf("conflicting mount: %v", err)
+		}
 	}
 }

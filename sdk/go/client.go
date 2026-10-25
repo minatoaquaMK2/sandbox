@@ -112,8 +112,8 @@ func (r claimRequest) rejectPinnedAxes() error {
 
 func (r claimRequest) validateVolumes() error {
 	for _, v := range r.Volumes {
-		if v.Mode != "" && v.Mode != volumeModeRW {
-			return fmt.Errorf("volume %q: mode must be \"\", %q, or %q, got %q", v.Name, volumeModeRO, volumeModeRW, v.Mode)
+		if err := validateVolume(v); err != nil {
+			return err
 		}
 		if r.VolumesAttachOnly && v.Mount != "" {
 			return fmt.Errorf("volume %q: mount %q is meaningless with WithVolumesAttachOnly, which leaves mounting to the caller", v.Name, v.Mount)
@@ -250,8 +250,9 @@ func (c *Client) ownerAt(ctx context.Context, addr, id, token string) (string, e
 }
 
 func (c *Client) handleFrom(dialed string, cr claimResponse) *Sandbox {
+	volumes := slices.Clone(cr.Volumes)
 	return &Sandbox{
-		ID: cr.ID, Deadline: cr.Deadline, Volumes: cr.Volumes, VolumesWant: slices.Clone(cr.Volumes),
+		ID: cr.ID, Deadline: cr.Deadline, Volumes: volumes, VolumesWant: slices.Clone(volumes),
 		FromCheckpoint: cr.FromCheckpoint, TemplateDigest: cr.TemplateDigest, NetRoute: cr.NetRoute,
 		c: c, token: cr.Token, owner: cmp.Or(cr.OwnerAddr, dialed),
 	}
