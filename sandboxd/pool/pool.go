@@ -116,6 +116,10 @@ var (
 	errNotSleeping   = errors.New("sandbox is no longer hibernated or archived")
 	errWokeMeanwhile = errors.New("woke between sweep and hibernate")
 	errNoEgressTap   = errors.New("egress-lane claim has no lockable tap")
+
+	ErrVolumeRegistrationConflict = errors.New("volume registration conflicts with the catalog")
+	ErrVolumeCatalogUnavailable   = errors.New("volume catalog requires a successful persistence retry")
+	ErrVolumeCatalogInvalid       = errors.New("runtime volume catalog storage configuration is invalid")
 )
 
 // Engine is the slice of the cocoon driver the manager consumes.
@@ -321,16 +325,14 @@ type PeerDeleteFunc func(ctx context.Context, id string)
 
 // Manager owns the node's pools, claims, and their persistence.
 type Manager struct {
-	eng     Engine
-	dataDir string
-	egress  bool
-	maxFork int
-	store   *claimStore
-	volumes map[string]catalogVolume
-	// volumeAdmission counts the live holders of each volume name; guarded by m.mu.
-	volumeAdmission map[string]volumeHolders
-	volumeRuns      map[*types.Sandbox]*volumeRun
-	volumeErrors    map[*types.Sandbox]map[string]string
+	eng          Engine
+	dataDir      string
+	egress       bool
+	maxFork      int
+	store        *claimStore
+	catalog      volumeCatalog
+	volumeRuns   map[*types.Sandbox]*volumeRun
+	volumeErrors map[*types.Sandbox]map[string]string
 
 	poolStore *poolStore
 	// poolShared is the cell's pool set with a meta store; poolVersion, under m.mu, is its newest version applied.
@@ -448,8 +450,7 @@ func NewManager(ctx context.Context, cfg *config.Config, eng Engine, secrets *eg
 		cocoondSocket:   cfg.CocoondSocket,
 		maxFork:         cmp.Or(cfg.MaxForkCount, defaultMaxFork),
 		store:           newClaimStore(cfg.DataDir, cfg.SyncClaims),
-		volumes:         make(map[string]catalogVolume, len(cfg.Volumes)),
-		volumeAdmission: map[string]volumeHolders{},
+		catalog:         volumeCatalog{entries: make(map[string]*catalogVolume, len(cfg.Volumes)), holders: map[string]volumeHolders{}},
 		volumeRuns:      map[*types.Sandbox]*volumeRun{},
 		volumeErrors:    map[*types.Sandbox]map[string]string{},
 		poolStore:       newPoolStore(cfg.DataDir),
@@ -478,11 +479,16 @@ func NewManager(ctx context.Context, cfg *config.Config, eng Engine, secrets *eg
 		healSem:         make(chan struct{}, maxConcurrentHeals),
 	}
 	for _, volume := range cfg.Volumes {
-		m.volumes[volume.Name] = catalogVolume{
-			disk:     engine.VolumeSpec{Name: volume.Name, Path: volume.Path, DirectIO: volume.DirectIO},
-			tenants:  slices.Clone(volume.Tenants),
-			writable: volume.Writable,
+		m.catalog.generation++
+		m.catalog.entries[volume.Name] = &catalogVolume{
+			generation: m.catalog.generation,
+			disk:       engine.VolumeSpec{Name: volume.Name, Path: volume.Path, DirectIO: cmp.Or(volume.DirectIO, types.DirectIOOff)},
+			acl:        newVolumeACL(volume.Tenants),
+			writable:   volume.Writable,
 		}
+	}
+	if err := m.loadRuntimeVolumes(); err != nil {
+		return nil, err
 	}
 	if err := os.MkdirAll(m.goldensDir(), 0o750); err != nil {
 		return nil, fmt.Errorf("create goldens dir: %w", err)
@@ -600,6 +606,7 @@ func (m *Manager) Run(ctx context.Context) {
 		case <-m.refillKick:
 			m.refillOnce(ctx)
 		case <-reap.C:
+			go m.retryVolumeCatalog(ctx)
 			m.retryRemovals(ctx)
 			m.reapOnce(ctx)
 			m.idleOnce(ctx)
