@@ -107,6 +107,9 @@ func TestStoreRoundTrip(t *testing.T) {
 		if err != nil {
 			t.Fatalf("load (sync=%v): %v", fsync, err)
 		}
+		if !s.hasRecoveryVolumes("sb_a") || s.hasRecoveryVolumes("sb_b") {
+			t.Fatal("loaded recovery volumes lost owner visibility")
+		}
 		if !reflect.DeepEqual(got, claims) {
 			t.Errorf("sync=%v: got %+v, want %+v", fsync, got, claims)
 		}
