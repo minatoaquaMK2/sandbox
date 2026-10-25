@@ -410,9 +410,13 @@ func (m *Manager) ownsRunLocked(sb *types.Sandbox, run *volumeRun) bool {
 	return m.claimed[sb.ID] == sb && m.volumeRuns[sb] == run
 }
 
-func (m *Manager) hasVolumeHolds(sb *types.Sandbox) bool {
+func (m *Manager) hasLiveVolumeHolds(sb *types.Sandbox) bool {
 	run := m.volumeRuns[sb]
-	return hasVolumes(sb) || run != nil && len(run.holds) > 0 || m.store.hasRecoveryVolumes(sb.ID)
+	return hasVolumes(sb) || run != nil && len(run.holds) > 0
+}
+
+func (m *Manager) hasVolumeHolds(sb *types.Sandbox) bool {
+	return m.hasLiveVolumeHolds(sb) || m.store.hasRecoveryVolumes(sb.ID)
 }
 
 func (m *Manager) volumeView(sb *types.Sandbox) types.SandboxVolumesResponse {
