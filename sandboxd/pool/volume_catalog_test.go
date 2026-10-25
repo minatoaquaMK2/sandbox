@@ -264,8 +264,10 @@ func TestRuntimeCatalogMissingBackingAndUnrestrictedBackingOwner(t *testing.T) {
 	eng := newFakeEngine()
 	m := newVolumeManager(t, eng, nil)
 	path := writeVolumeImage(t, "runtime", "bytes")
-	if err := os.Chown(path, 65534, 65534); err != nil {
-		t.Fatal(err)
+	if os.Geteuid() == 0 {
+		if err := os.Chown(path, 65534, 65534); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := m.RegisterVolume(t.Context(), "runtime", types.VolumeRegistration{Path: path}); err != nil {
 		t.Fatalf("nonroot backing owner: %v", err)
