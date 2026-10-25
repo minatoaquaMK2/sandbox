@@ -7,7 +7,8 @@ Register both read-only catalog entries on the owning node and grant the
 sandbox's tenant access to them. Put `v1` and `v2` in each image's `/version`
 file. Keep each name bound to the same immutable image while held. Use Cocoon
 v0.7.2 or newer and set `SANDBOX_ADDR` and `SANDBOX_API_TOKEN` for the client.
-A sandbox token alone cannot manage volumes.
+A sandbox token alone cannot manage volumes. For a complete sleep and wake sequence,
+see [the external controller example](volume-controller.md).
 
 A configured node root token can [register backing paths](sandboxd-api.md#put-v1volumesname)
 without editing static config. Registration persists only node-local catalog
@@ -17,7 +18,8 @@ claims. That permission also allows reattachment to another claim after detach.
 For a sleep and wake workflow, an external controller owns quiescence and unmount before detach, a reservation
 through sleep, and access gating until wake, attach, and mount complete. That
 gate covers API and preview access on every node that can wake the sandbox.
-Wake establishes only silkd readiness. The controller supplies the reservation,
+Wake establishes only silkd readiness. The [controller example](volume-controller.md)
+has SDK and HTTP contract tests. The controller still supplies the reservation,
 guest operations, and access gate. Live changes support mounted and attach-only
 entries in read-only or writable mode.
 

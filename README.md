@@ -23,6 +23,10 @@ the OpenAI Agents SDK and LangChain adapters, silkd protocol,
 performance) — source in
 [`docs/`](docs/).
 
+For runtime registration and live disk changes, see [replace a dataset](docs/live-volumes.md).
+The [external controller guide](docs/volume-controller.md) combines detach, hibernate,
+wake, and reattachment while keeping the controller reservation and access gate.
+
 ## Layout
 
 - `silkd/` — in-guest product daemon (Rust, tokio): exec with context,
