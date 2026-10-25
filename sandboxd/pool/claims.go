@@ -433,6 +433,25 @@ func (s *claimStore) recoveryVolumesFor(owner string) []types.Volume {
 	return slices.Clone(s.retainedVolumes[owner])
 }
 
+func (s *claimStore) detachingOwners() map[string]bool {
+	if !s.recoveryVolumesPresent.Load() {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var owners map[string]bool
+	for id := range s.changed {
+		retained := s.retained[id]
+		if len(s.currentRefs(id).volumes) == 0 && len(retained.acknowledged.volumes)+len(retained.attempted.volumes) != 0 {
+			if owners == nil {
+				owners = map[string]bool{}
+			}
+			owners[id] = true
+		}
+	}
+	return owners
+}
+
 func (s *claimStore) hasRecoveryVolumes(owner string) bool {
 	if !s.recoveryVolumesPresent.Load() {
 		return false
