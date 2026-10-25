@@ -31,7 +31,12 @@ func (e *LiveVolumeUnsupported) Error() string {
 }
 
 type volumeMount struct {
-	devNum, root, path, options string
+	devNum, root, path, options, superOptions string
+}
+
+// VolumeDetachResult reports this call's writable unmount proof when DetachVolume succeeds.
+type VolumeDetachResult struct {
+	NormalUnmount bool
 }
 
 // CheckLiveVolumeSupport rejects runtimes without idempotent live disk attach and detach.
@@ -63,38 +68,49 @@ func (e *Engine) MountLiveVolume(ctx context.Context, vsockSocket, name, mount s
 }
 
 // DetachVolume unmounts a guest volume before confirming host removal.
-func (e *Engine) DetachVolume(ctx context.Context, vmName, vsockSocket, name, mount string) error {
+func (e *Engine) DetachVolume(ctx context.Context, vmName, vsockSocket, name, mount string) (VolumeDetachResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, VolumeMutationTimeout)
 	defer cancel()
 	device, found, err := e.findVolumeDevice(ctx, vsockSocket, name)
 	if err != nil {
-		return err
+		return VolumeDetachResult{}, err
 	}
+	normal := false
 	if found {
-		if err = e.unmountLiveVolume(ctx, vsockSocket, device, mount); err != nil {
-			return err
+		if normal, err = e.unmountLiveVolume(ctx, vsockSocket, device, mount); err != nil {
+			return VolumeDetachResult{}, err
 		}
 	}
-	_, err = e.run(ctx, "vm", "disk", "detach", vmName, argName, name)
-	return err
+	if _, err = e.run(ctx, "vm", "disk", "detach", vmName, argName, name); err != nil {
+		return VolumeDetachResult{}, err
+	}
+	return VolumeDetachResult{NormalUnmount: normal}, nil
 }
 
-func (e *Engine) unmountLiveVolume(ctx context.Context, vsockSocket, device, mount string) error {
+func (e *Engine) unmountLiveVolume(ctx context.Context, vsockSocket, device, mount string) (bool, error) {
+	if mount == "" {
+		return false, e.refuseOtherMounts(ctx, vsockSocket, device)
+	}
 	devNum, mounts, err := e.volumeMounts(ctx, vsockSocket, device)
 	if err != nil {
-		return err
+		return false, err
 	}
 	target := e.resolveMount(ctx, vsockSocket, mount, mounts)
 	atTarget := slices.DeleteFunc(mounts, func(m volumeMount) bool { return m.path != target })
+	normal := false
 	if len(atTarget) == 1 && atTarget[0].devNum == devNum && atTarget[0].root == "/" {
 		if err = e.UnmountVolume(ctx, vsockSocket, mount); err != nil {
 			if _, ok := errors.AsType[*guestExitError](err); ok {
-				return &VolumeMountConflict{Message: fmt.Sprintf("cannot unmount %q; close guest references and retry", mount)}
+				return false, &VolumeMountConflict{Message: fmt.Sprintf("cannot unmount %q; close guest references and retry", mount)}
 			}
-			return err
+			return false, err
 		}
+		normal = writableMountOptions(atTarget[0].options) && writableMountOptions(atTarget[0].superOptions)
 	}
-	return e.refuseOtherMounts(ctx, vsockSocket, device)
+	if err = e.refuseOtherMounts(ctx, vsockSocket, device); err != nil {
+		return false, err
+	}
+	return normal, nil
 }
 
 func (e *Engine) volumeMounts(ctx context.Context, vsockSocket, device string) (string, []volumeMount, error) {
@@ -108,11 +124,13 @@ func (e *Engine) volumeMounts(ctx context.Context, vsockSocket, device string) (
 	}
 	var mounts []volumeMount
 	for line := range strings.SplitSeq(strings.TrimSpace(string(raw)), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) < 10 || !slices.Contains(fields[6:], "-") {
+		mount, filesystem, ok := strings.Cut(line, " - ")
+		fields := strings.Fields(mount)
+		fsFields := strings.Split(filesystem, " ")
+		if !ok || len(fields) < 6 || len(fsFields) != 3 || fsFields[0] == "" || fsFields[2] == "" {
 			return "", nil, errors.New("invalid guest mountinfo")
 		}
-		mounts = append(mounts, volumeMount{fields[2], mountUnescaper.Replace(fields[3]), mountUnescaper.Replace(fields[4]), fields[5]})
+		mounts = append(mounts, volumeMount{fields[2], mountUnescaper.Replace(fields[3]), mountUnescaper.Replace(fields[4]), fields[5], fsFields[2]})
 	}
 	return strings.TrimSpace(string(devNum)), mounts, nil
 }
@@ -162,6 +180,11 @@ func (e *Engine) refuseOtherMounts(ctx context.Context, vsockSocket, device stri
 		}
 	}
 	return nil
+}
+
+func writableMountOptions(options string) bool {
+	parts := strings.Split(options, ",")
+	return slices.Contains(parts, "rw") && !slices.Contains(parts, "ro") && !slices.Contains(parts, "")
 }
 
 func bindConflict(path string) *VolumeMountConflict {

@@ -7,7 +7,7 @@ from http.server import HTTPServer, ThreadingHTTPServer
 import pytest
 from conftest import FakeNode, sandbox_at
 
-from cocoonsandbox import APIError, Client, Template
+from cocoonsandbox import APIError, Client, Sandbox, Template
 
 
 class KeptNode(FakeNode):
@@ -109,7 +109,14 @@ def test_claim_omits_volume_mode_ro(node):
 
 def test_claim_attaches_volumes_without_mounting(node):
     seen = recording_claim(
-        {"id": "sb_1", "token": "tok", "volumes": [{"name": "imagenet"}, {"name": "scratch", "mode": "rw"}]}
+        {
+            "id": "sb_1",
+            "token": "tok",
+            "volumes": [
+                {"name": "imagenet", "attach_only": True},
+                {"name": "scratch", "mode": "rw", "attach_only": True},
+            ],
+        }
     )
     sb = Client(node).new("rt:24.04", volumes=["imagenet", {"name": "scratch", "mode": "rw"}], mount=False)
     assert seen == [
@@ -119,15 +126,18 @@ def test_claim_attaches_volumes_without_mounting(node):
             "volumes_attach_only": True,
         }
     ]
-    assert sb.volumes == [{"name": "imagenet"}, {"name": "scratch", "mode": "rw"}]
+    assert sb.volumes == [
+        {"name": "imagenet", "attach_only": True},
+        {"name": "scratch", "mode": "rw", "attach_only": True},
+    ]
 
 
 def test_template_claim_attaches_volumes_without_mounting(node):
-    seen = recording_claim({"id": "sb_2", "token": "tok", "volumes": [{"name": "imagenet"}]})
+    seen = recording_claim({"id": "sb_2", "token": "tok", "volumes": [{"name": "imagenet", "attach_only": True}]})
     sb = Template(Client(node), node, "task:v1", "none", "small").new(volumes=["imagenet"], mount=False)
     assert seen[0]["volumes_attach_only"] is True
     assert seen[0]["volumes"] == [{"name": "imagenet"}]
-    assert sb.volumes == [{"name": "imagenet"}]
+    assert sb.volumes == [{"name": "imagenet", "attach_only": True}]
 
 
 def test_claim_rejects_mount_without_mounting(node):
@@ -382,3 +392,221 @@ def kept_node():
     threading.Thread(target=server.serve_forever, daemon=True).start()
     yield f"127.0.0.1:{server.server_port}"
     server.shutdown()
+
+
+@pytest.mark.parametrize("promoted", [False, True])
+@pytest.mark.parametrize("global_flag", [False, True])
+def test_claim_preserves_per_entry_attach_only(node, promoted, global_flag):
+    entries = [{"name": "data", "attach_only": False}, {"name": "work", "mode": "rw", "attach_only": True}]
+    reply_entries = [{**entry, "attach_only": global_flag or entry["attach_only"]} for entry in entries]
+    seen = recording_claim({"id": "sb_1", "token": "tok", "volumes": reply_entries})
+    client = Client(node)
+    for _ in range(2):
+        if promoted:
+            sb = Template(client, node, "task:v1", "none", "small").new(volumes=entries, mount=not global_flag)
+        else:
+            sb = client.new("rt:24.04", volumes=entries, mount=not global_flag)
+        assert seen[-1].get("volumes_attach_only", False) is global_flag
+        assert seen[-1]["volumes"] == entries
+        assert sb.volumes == reply_entries
+        assert entries[0]["attach_only"] is False
+
+
+@pytest.mark.parametrize("promoted", [False, True])
+def test_claim_rejects_per_entry_attach_only_mount(node, promoted):
+    entries = [{"name": "data", "mount": "/data", "attach_only": True}]
+    with pytest.raises(TypeError, match="meaningless with attach_only=True"):
+        if promoted:
+            Template(Client(node), node, "task:v1", "none", "small").new(volumes=entries)
+        else:
+            Client(node).new("rt:24.04", volumes=entries)
+
+
+@pytest.mark.parametrize("promoted", [False, True])
+def test_claim_methods_reject_non_volume_sequences_before_request(node, promoted):
+    seen = recording_claim({"id": "sb_1", "token": "tok"})
+    client = Client(node)
+    claim = (
+        Template(client, node, "task:v1", "none", "small").new
+        if promoted
+        else lambda **kw: client.new("rt:24.04", **kw)
+    )
+    for volumes in ("data", "", b"data", b"", bytearray(), {"name": "data"}):
+        with pytest.raises(TypeError):
+            claim(volumes=volumes)
+    assert seen == []
+
+
+@pytest.mark.parametrize("promoted", [False, True])
+@pytest.mark.parametrize("field", ["name", "mount", "mode"])
+def test_claim_methods_reject_non_string_volume_fields_before_request(node, promoted, field):
+    seen = recording_claim({"id": "sb_1", "token": "tok"})
+    client = Client(node)
+    claim = (
+        Template(client, node, "task:v1", "none", "small").new
+        if promoted
+        else lambda **kw: client.new("rt:24.04", **kw)
+    )
+    volume = {"name": "data", field: True}
+    with pytest.raises(TypeError):
+        claim(volumes=[volume])
+    assert seen == []
+
+
+@pytest.mark.parametrize("promoted", [False, True])
+def test_claim_methods_preserve_empty_volume_sequence_semantics(node, promoted):
+    seen = recording_claim({"id": "sb_1", "token": "tok"})
+    client = Client(node)
+    claim = (
+        Template(client, node, "task:v1", "none", "small").new
+        if promoted
+        else lambda **kw: client.new("rt:24.04", **kw)
+    )
+    for volumes in (None, [], ()):
+        claim(volumes=volumes)
+    assert len(seen) == 3
+    assert all("volumes" not in body for body in seen)
+
+
+@pytest.mark.parametrize("promoted", [False, True])
+@pytest.mark.parametrize("kind", ["list", "tuple", "generator", "set", "empty-generator"])
+def test_claim_volume_iterables_are_consumed_once(node, promoted, kind):
+    seen = recording_claim({"id": "sb_1", "token": "tok"})
+    consumed = []
+
+    def generate():
+        if kind != "empty-generator":
+            consumed.append("data")
+            yield "data"
+
+    volumes = {"list": ["data"], "tuple": ("data",), "set": {"data"}}.get(kind)
+    if volumes is None:
+        volumes = generate()
+    client = Client(node)
+    if promoted:
+        Template(client, node, "task:v1", "none", "small").new(volumes=volumes)
+        assert seen[0].get("no_redirect", False) is (kind == "empty-generator")
+    else:
+        client.new("rt:24.04", volumes=volumes)
+    if kind == "empty-generator":
+        assert "volumes" not in seen[0]
+    else:
+        assert seen[0]["volumes"] == [{"name": "data"}]
+    assert consumed == (["data"] if kind == "generator" else [])
+
+
+def test_claim_and_summary_preserve_explicit_volume_fields(node):
+    client = Client(node)
+    reply = {
+        "id": "sb_1",
+        "token": "tok",
+        "volumes": [{"name": "raw", "attach_only": True}, {"name": "mounted", "attach_only": False}],
+    }
+    FakeNode.routes[("POST", "/v1/claim")] = lambda body, path: (200, reply)
+    sb = client.new("rt:24.04")
+    assert sb.volumes[0]["attach_only"] is True
+    assert sb.volumes[1]["attach_only"] is False
+    assert reply["volumes"][0]["attach_only"] is True
+    sb.volumes[0]["name"] = "caller"
+    assert sb.volumes_want[0]["name"] == reply["volumes"][0]["name"] == "raw"
+    rows = [
+        {
+            "id": "sb_1",
+            "volumes": [{"name": "raw", "attach_only": True}],
+            "volumes_want": [{"name": "raw", "mount": "", "attach_only": True}],
+        },
+        {"id": "sb_2", "volumes": [], "volumes_want": []},
+        {"id": "sb_3"},
+    ]
+    FakeNode.routes[("GET", "/v1/sandboxes")] = lambda body, path: (200, {"sandboxes": rows})
+    summaries = client.sandboxes()
+    assert summaries[0]["volumes"][0]["attach_only"] is True
+    assert summaries[0]["volumes_want"][0]["attach_only"] is True
+    assert summaries[1]["volumes"] == summaries[1]["volumes_want"] == []
+    assert "volumes" not in summaries[2]
+    assert rows[0]["volumes"][0]["attach_only"] is True
+
+
+@pytest.mark.parametrize(
+    ("path", "payload"),
+    [
+        ("/v1/checkpoints/ck_1/claim", {"volumes": [{"name": "raw", "attach_only": True}]}),
+        ("/v1/sandboxes/sb_1/fork", {"children": [{"volumes": [{"name": "raw", "attach_only": True}]}]}),
+        ("/v1/volumes", {"volumes": [{"name": "catalog"}]}),
+        ("/v1/info", {"metadata": {"volumes": [{"name": "opaque"}]}}),
+    ],
+)
+def test_transport_keeps_json_uninterpreted(spawn_node, path, payload):
+    addr = spawn_node({("GET", path): lambda body, request_path: (200, payload)})
+    reply = Client(addr)._request(addr, "GET", path, None, "inspect")
+    assert reply == payload
+
+
+def test_claim_response_decoding_does_not_depend_on_route(spawn_node):
+    path = "/v1/custom-claims"
+    payload = {"id": "sb_1", "token": "tok", "volumes": [{"name": "raw", "attach_only": True}]}
+    addr = spawn_node({("POST", path): lambda body, request_path: (200, payload)})
+    sb = Client(addr)._claim_from(addr, {}, path=path)
+    assert sb.volumes == [{"name": "raw", "attach_only": True}]
+    assert payload["volumes"][0]["attach_only"] is True
+
+
+@pytest.mark.parametrize(
+    ("path", "fields"),
+    [
+        ("/v1/claim", {"volumes": [None]}),
+        ("/v1/sandboxes", {"sandboxes": [None]}),
+        ("/v1/sandboxes/sb_1/fork", {"children": [None]}),
+        ("/v1/sandboxes/sb_1/volumes", {"volumes": ["bad"]}),
+    ],
+)
+def test_malformed_error_details_do_not_hide_http_error(spawn_node, path, fields):
+    payload = {"error": "storage unavailable", **fields}
+    addr = spawn_node({("GET", path): lambda body, request_path: (503, payload)})
+    with pytest.raises(APIError) as caught:
+        Client(addr)._request(addr, "GET", path, None, "inspect")
+    assert caught.value.status == 503
+    assert caught.value.message == "storage unavailable"
+    assert caught.value.reply == payload
+
+
+@pytest.mark.parametrize("operation", ["checkpoint", "fork"])
+def test_sandbox_handle_decodes_volume_responses(spawn_node, operation):
+    payload = {
+        "id": "sb_2",
+        "token": "tok",
+        "volumes": [{"name": "raw", "attach_only": True}, {"name": "mounted", "mount": "/data"}],
+    }
+    if operation == "checkpoint":
+        path = "/v1/checkpoints/ck_1/claim"
+        response = payload
+    else:
+        path = "/v1/sandboxes/sb_1/fork"
+        response = {"children": [payload]}
+    addr = spawn_node({("POST", path): lambda body, request_path: (200, response)})
+    client = Client(addr)
+    sb = client.checkpoint("ck_1").new() if operation == "checkpoint" else sandbox_at(addr).fork(1)[0]
+    assert sb.volumes == [{"name": "raw", "attach_only": True}, {"name": "mounted", "mount": "/data"}]
+    assert sb.volumes_want == sb.volumes
+    assert payload["volumes"][0]["attach_only"] is True
+
+
+@pytest.mark.parametrize(
+    "volume",
+    [
+        {"name": "data"},
+        {"name": "data", "mount": ""},
+        {"name": "data", "attach_only": False},
+        {"name": "data", "attach_only": True},
+        {"name": "data", "mount": "/data"},
+    ],
+)
+def test_sandbox_constructor_preserves_volume_input(volume):
+    volumes = [volume]
+    sb = Sandbox(Client("unused.invalid:7777"), "sb_1", "tok", "unused.invalid:7777", volumes=volumes)
+    assert sb.volumes == sb.volumes_want == volumes
+    sb.volumes[0]["name"] = "caller"
+    assert sb.volumes_want == volumes
+    sb.volumes_want[0]["name"] = "desired"
+    assert volumes == [volume]
+    assert volume["name"] == "data"

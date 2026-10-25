@@ -130,6 +130,10 @@ func (m *Manager) putRow(ctx context.Context, sb *types.Sandbox, ck string, repl
 		return 0, nil
 	}
 	m.mu.Lock()
+	if replica && m.hasVolumeHolds(sb) {
+		m.mu.Unlock()
+		return 0, ErrVolumeCapture
+	}
 	dto, deadline, held := dtoOf(sb), sb.Deadline, sb.ArchiveEpoch
 	switch {
 	case replica:
@@ -299,7 +303,9 @@ func (m *Manager) reputArchive(ctx context.Context, sb *types.Sandbox, held int6
 		epoch, err = m.putReplica(ctx, sb, sb.ReplicaCk)
 	}
 	if err != nil {
-		log.WithFunc("pool.reputArchive").Warnf(ctx, "re-put archive row %s: %v", sb.ID, err)
+		if !errors.Is(err, ErrVolumeCapture) {
+			log.WithFunc("pool.reputArchive").Warnf(ctx, "re-put archive row %s: %v", sb.ID, err)
+		}
 		return
 	}
 	_, _ = m.commitIfLive(ctx, sb, func() { sb.ArchiveEpoch = epoch })

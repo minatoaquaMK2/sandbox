@@ -42,7 +42,7 @@ func TestRuntimeCatalogDefaultACL(t *testing.T) {
 				if local, err := current.VolumePlacement(testKey, "", []string{"home"}); err != nil || !local {
 					t.Errorf("operator placement: %v %v", local, err)
 				}
-				tenantClaim, err := current.ClaimProvision(t.Context(), testKey, ClaimOptions{Tenant: "acme", Volumes: []types.Volume{{Name: "home", Mount: "/home"}}})
+				tenantClaim, err := current.ClaimProvision(t.Context(), testKey, ClaimOptions{Tenant: "acme", Volumes: []types.Volume{{Name: "home", Mode: types.VolumeModeRW, AttachOnly: true}}})
 				if err != nil {
 					t.Fatalf("tenant initial attachment: %v", err)
 				}
@@ -52,7 +52,7 @@ func TestRuntimeCatalogDefaultACL(t *testing.T) {
 				if _, err = current.resolveVolumes(t.Context(), "acme", []types.Volume{{Name: "data"}}); err != nil {
 					t.Errorf("public static volume changed: %v", err)
 				}
-				rootClaim, err := current.ClaimProvision(t.Context(), testKey, ClaimOptions{Volumes: []types.Volume{{Name: "home", Mount: "/home"}}})
+				rootClaim, err := current.ClaimProvision(t.Context(), testKey, ClaimOptions{Volumes: []types.Volume{{Name: "home", Mode: types.VolumeModeRW, AttachOnly: true}}})
 				if err != nil {
 					t.Fatalf("operator initial attachment: %v", err)
 				}
@@ -72,7 +72,7 @@ func TestRuntimeCatalogPublicLiveAttachment(t *testing.T) {
 			if err := m.RegisterVolume(t.Context(), "home", types.VolumeRegistration{Path: writeVolumeImage(t, "home.img", "private"), Writable: true}); err != nil {
 				t.Fatal(err)
 			}
-			want := []types.Volume{{Name: "home", Mount: "/home"}}
+			want := []types.Volume{{Name: "home", Mode: types.VolumeModeRW, AttachOnly: true}}
 			change := func(caller string, volumes []types.Volume) error {
 				if patch {
 					_, err := m.PatchVolumes(t.Context(), sb.ID, caller, types.VolumePatch{Add: volumes})
@@ -131,7 +131,7 @@ func TestRuntimeCatalogRecoveryReferenceDoesNotAuthorizeAttach(t *testing.T) {
 			if err := m.RegisterVolume(t.Context(), "home", types.VolumeRegistration{Path: writeVolumeImage(t, "home.img", "private"), Writable: true, Tenants: []string{"acme"}}); err != nil {
 				t.Fatal(err)
 			}
-			want := []types.Volume{{Name: "home", Mount: "/home"}}
+			want := []types.Volume{{Name: "home", Mode: types.VolumeModeRW, AttachOnly: true}}
 			if _, err := m.SetVolumes(t.Context(), sb.ID, "", want); err != nil {
 				t.Fatal(err)
 			}
@@ -155,7 +155,7 @@ func TestRuntimeCatalogRecoveryReferenceDoesNotAuthorizeAttach(t *testing.T) {
 			if err != nil || claims[sb.ID] == nil || !slices.Equal(claims[sb.ID].Volumes, want) {
 				t.Fatalf("old durable attachment missing: %+v, %v", claims, err)
 			}
-			if _, err = m.ClaimProvision(t.Context(), testKey, ClaimOptions{Volumes: []types.Volume{{Name: "home", Mode: types.VolumeModeRW}}}); !errors.Is(err, ErrVolumeBusy) {
+			if _, err = m.ClaimProvision(t.Context(), testKey, ClaimOptions{Volumes: want}); !errors.Is(err, ErrVolumeBusy) {
 				t.Fatalf("recovery reference lost writer exclusion: %v", err)
 			}
 			if _, err = m.Checkpoint(t.Context(), sb.ID, Cred{Token: sb.Token}, "unretired", ""); !errors.Is(err, ErrVolumeCapture) {

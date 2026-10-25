@@ -123,6 +123,14 @@ func (s *claimStore) load() (map[string]*types.Sandbox, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, sb := range claims {
+		for _, volumes := range [][]types.Volume{sb.Volumes, sb.VolumesWant} {
+			for i := range volumes {
+				if volumes[i].AttachOnly && volumes[i].Mount != "" {
+					return nil, fmt.Errorf("claim %q has a contradictory volume mount", sb.ID)
+				}
+				volumes[i].AttachOnly = volumes[i].Mount == ""
+			}
+		}
 		if sb.VolumesWant == nil {
 			sb.VolumesWant = sb.Volumes
 		}

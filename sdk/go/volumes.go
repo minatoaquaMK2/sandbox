@@ -55,18 +55,28 @@ func (s *Sandbox) GetVolumes(ctx context.Context) (SandboxVolumesResponse, error
 	return s.requestVolumes(ctx, http.MethodGet, nil, "get volumes")
 }
 
-// SetVolumes converges the full desired set; an explicit empty slice clears mutable mounts, and nil is rejected.
+// SetVolumes converges the full desired set; an explicit empty slice clears volumes, and nil is rejected.
 func (s *Sandbox) SetVolumes(ctx context.Context, volumes []Volume) (SandboxVolumesResponse, error) {
 	if volumes == nil {
 		return SandboxVolumesResponse{}, errors.New("set volumes: use an explicit empty slice to clear volumes")
+	}
+	for _, volume := range volumes {
+		if err := validateVolume(volume); err != nil {
+			return SandboxVolumesResponse{}, err
+		}
 	}
 	return s.requestVolumes(ctx, http.MethodPut, struct {
 		Volumes []Volume `json:"volumes"`
 	}{Volumes: volumes}, "set volumes")
 }
 
-// PatchVolumes adds or removes read-only mounted entries by name, retaining immutable entries.
+// PatchVolumes adds or removes catalog volumes by name.
 func (s *Sandbox) PatchVolumes(ctx context.Context, patch VolumePatch) (SandboxVolumesResponse, error) {
+	for _, volume := range patch.Add {
+		if err := validateVolume(volume); err != nil {
+			return SandboxVolumesResponse{}, err
+		}
+	}
 	return s.requestVolumes(ctx, http.MethodPatch, patch, "patch volumes")
 }
 
@@ -115,4 +125,14 @@ func (s *Sandbox) requestVolumes(ctx context.Context, method string, request any
 		return out, fmt.Errorf("decode %s response: missing volume view", verb)
 	}
 	return out, nil
+}
+
+func validateVolume(v Volume) error {
+	if v.Mode != "" && v.Mode != volumeModeRO && v.Mode != volumeModeRW {
+		return fmt.Errorf("volume %q: mode must be \"\", %q, or %q, got %q", v.Name, volumeModeRO, volumeModeRW, v.Mode)
+	}
+	if v.AttachOnly && v.Mount != "" {
+		return fmt.Errorf("volume %q: mount %q is meaningless with attach_only, which leaves mounting to the caller", v.Name, v.Mount)
+	}
+	return nil
 }

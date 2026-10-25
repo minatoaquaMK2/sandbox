@@ -83,17 +83,17 @@ Auth: `Authorization: Bearer <api_token>` (when configured).
 - `egress` `false` claims with no [egress policy](egress.md), whatever the
   pool's (or, for a promoted template, its source pool's): the guest's doors are
   never bound. Omitted or `true` keeps the policy the claim would get
-- `volumes` is an ordered list of at most eight unique catalog names. `mount`
-  defaults to `/volumes/<name>`; a custom value must be absolute and clean,
+- `volumes` is an ordered list of at most eight unique catalog names. Unless
+  `attach_only` is true, `mount` defaults to `/volumes/<name>`; a custom value must be absolute and clean,
   outside the guest OS tree, unique, and non-nesting within the request.
   `mode` is `"ro"` (default, omitted) or `"rw"`; `"rw"` requires the catalog
   entry's `writable: true` (see [deploy](deploy.md#dataset-volumes))
 - `volumes_attach_only` (default `false`) attaches every requested volume
   without mounting it, handing the whole mount contract to the workload. It
-  requires at least one volume, and rejects any entry carrying a `mount` —
-  the path is meaningless when the caller mounts the device. Everything below
-  describes the default, eager behaviour, which is completely unchanged; the
-  attach-only contract is in [its own section](#attach-only-volumes)
+  requires at least one volume and rejects entries with a nonempty `mount`.
+  Per-entry `attach_only: true` selects the same behavior for that entry.
+  See the [attach-only contract](#attach-only-volumes) and
+  [version compatibility](#volume-version-compatibility) before using mixed initial claims
 
 Success:
 
@@ -129,19 +129,30 @@ and persisted at finalization — `mode` is omitted from the echo for `ro`
 entries, matching the request shape. sandboxd attaches each disk, waits for
 the device settle — a serial match under `/sys/block`, then the `/dev/<name>`
 node itself, since the kernel publishes sysfs before devtmpfs creates it — up
-to 2 seconds total, and mounts the filesystem — read-only, unless the entry
-requested and was granted `rw` — before returning. A custom mount may shadow
+to 2 seconds total, and mounts the filesystem for mounted entries before
+returning. An attach-only entry skips that wait and mount. A custom mount may shadow
 an existing populated guest directory for the claim's life.
 
 ### Attach-only volumes
 
-`"volumes_attach_only": true` stops after the attach. The device appears in
-the guest, nothing is mounted, and the echoed entries carry no `mount` key:
+Set `"attach_only": true` on an individual volume to stop after attachment.
+It can share a raw HTTP claim with mounted entries on a matching daemon.
+The existing claim-wide
+`"volumes_attach_only": true` applies that choice to every entry. A nonempty
+`mount` is invalid with either form. The device appears in the guest without a
+mount. HTTP response entries include `attach_only: true` and omit `mount`:
 
 ```json
 {"id": "sb_…", "token": "…",
- "volumes": [{"name": "imagenet"}, {"name": "scratch-db", "mode": "rw"}]}
+ "volumes": [{"name": "imagenet", "attach_only": true},
+             {"name": "scratch-db", "mode": "rw", "attach_only": true}]}
 ```
+
+Claim volume entries use this explicit field in every HTTP response, including
+nested sandbox summaries and partial failure views. The SDKs read the field
+without inferring attachment behavior from an omitted mount. Returning the
+response to the same sandbox preserves the held attachment shape. New entries
+without either attach-only flag use the default mount.
 
 Find each device by its virtio serial, which is the catalog name — poll this,
 not a one-shot lookup: the claim can return before the guest enumerates the
@@ -173,27 +184,26 @@ mounts it, so the guarantee does not depend on your mount flags.
 
 The whole consistency contract moves to the caller with the mount:
 
-- sandboxd writes no dirty marker for an attach-only `rw` claim and clears
-  none, because it cannot verify your unmount and therefore promises nothing.
-  The flush is yours too: release runs no unmount and no `sync`, so whatever
-  the workload left unsynced is discarded with the VM. Releasing without a
-  clean unmount of your own leaves the image exactly as a filesystem crash
-  would. The next *eager* `ro` claim then fails at mount time with a 500 —
-  loud and attributable to the claim that skipped its unmount — instead of
-  the marker's 409. Recovery is any `rw` cycle that replays the journal.
+- sandboxd writes and clears no dirty marker for attach-only `rw`. A guest
+  crash while writing also leaves no daemon-managed crash-dirty record.
+  Release runs no unmount and no `sync` for these entries. The caller must
+  stop writes, flush, and unmount before detach or release, and owns recovery
+  after a crash. A later `ro` claim can be admitted without a marker and may
+  mount an inconsistent filesystem. Mount failure is not guaranteed. Establish
+  filesystem consistency before publishing the image for read-only use.
 - a marker left by an earlier *eager* `rw` crash is not cleared by attach-only
   cycles, and still refuses eager `ro` claims with 409 until a `rw` claim
   releases cleanly.
 - writes straight to the block device bypass the filesystem journal entirely
   and are outside marker protection in either mode.
 
-What still protects other claims is unchanged: admission excludes an
-attach-only `rw` claim against every other claim of the name (and readers
-against a writer), an attach-only `ro` claim of a marker-bearing image is
-refused with 409, and a claim with volumes still refuses checkpoint, fork and
-hibernate. An attach-only claim costs one disk attach per volume — no device
-settle, no mount round-trip — and release costs nothing at all: removing the
-VM closes the devices.
+Admission excludes an attach-only `rw` claim against every other claim of the
+name, and excludes a writer while readers hold the name. An attach-only `ro`
+claim of a marker-bearing image is refused with 409. Capture remains refused
+while volume holds or recovery references remain. An attach-only claim performs
+one disk attach per volume without waiting for guest enumeration or mounting
+it. Release removes the VM and
+closes its devices without unmounting caller-managed filesystems.
 
 Redirects (mutually exclusive with the fields above) name peers to retry
 at — sent on a warm miss with warm peers, when the node lacks a golden for
@@ -221,7 +231,7 @@ an unknown and a forbidden volume return the same error text.
 
 Errors: 400 unknown template axis, metadata over a bound (the message names
 it), an unknown `on_expire`, invalid/duplicate volumes,
-`volumes_attach_only` with no volumes or with an entry carrying a `mount`,
+`volumes_attach_only` with no volumes or with an entry carrying a nonempty `mount`,
 `mode: "rw"`
 against a non-writable entry, or a volume that is unknown or forbidden (the
 latter two are deliberately indistinguishable), or
@@ -234,6 +244,24 @@ release before `ro` claims resume; see
 [deploy](deploy.md#writable-dataset-volumes)); 429 node at `max_claims`, the
 calling tenant at its own `max_claims`, or the node draining; 500
 provisioning failed.
+
+### Volume version compatibility
+
+Per-entry `attach_only` describes the current source API. Older claim decoders
+can ignore that field and mount the disk instead. Before sending a mixed
+initial claim over HTTP, upgrade every serving node, including redirect
+targets. Do not retry a rejected live request after dropping `attach_only`.
+An older live endpoint with strict request decoding rejects the new field
+before changing devices.
+
+The current source Go and Python SDKs preserve per-entry `attach_only` in
+initial claims, including mixed mounted and attach-only lists. Claim-wide
+`volumes_attach_only` remains available as an alias. Upgrade every possible
+placement and redirect target before using per-entry initial claims.
+These SDK changes are unreleased. The published Python 0.1.19 SDK accepts only
+`name`, `mount`, and `mode` in request mappings. It rejects responses containing
+`attach_only` when passed back as requests. Upgrade the SDK before using that
+GET-to-PUT workflow.
 
 ## GET /v1/volumes
 
@@ -287,8 +315,8 @@ JSON return 400.
 - `tenants` grants the named tenants self-service access. Omitted or empty
   permits every authenticated scope, for both static and runtime entries.
   Names use the tenant API name syntax. Runtime registration rejects invalid
-  names. Static config warns and skips invalid names. A nonempty static list with no
-  valid names remains restricted and grants no tenant access. A valid name may be
+  names. Static config warns and skips invalid names. A nonempty static list
+  with no valid names remains restricted and grants no tenant access. A valid name may be
   registered before that tenant exists; it grants no access until the tenant
   is created.
 
@@ -311,7 +339,7 @@ acceptance, so it does not promise that the request will take effect. After
 repairing storage failures, retry the exact request to establish completion.
 Cancellation is not a rollback once a write has been accepted.
 GET retains its existing projection without host paths or tenant access lists.
-Registered entries support the existing mounted read-only live volume API.
+Registered entries support the live volume modes described below.
 
 Only registration metadata is persisted locally in
 `data_dir/runtime-volumes.json`, which loads before claim recovery. The record
@@ -340,9 +368,26 @@ semantics as PUT. A failed DELETE may therefore remove the registration later.
 An empty GET volume view alone does not establish that a recovery reference
 has retired.
 
-Downgrading to a daemon without runtime registration requires draining runtime
-references or supplying equivalent static volume config. Pending live volume
-changes must finish before downgrade.
+An external controller owns quiescence and guest unmount before detach. It
+confirms successful detach and recovery bookkeeping before hibernation, and
+keeps its own volume reservation while the sandbox sleeps. sandboxd holds no
+reservation after detach and reference retirement, so root can attach that
+volume elsewhere during sleep. An empty `tenants` list allows every tenant
+to attach the volume after detach. A nonempty list permits only the named
+claim owners and root-owned claims. The ACL does not reserve a volume for one
+claim or restrict an allowed tenant to controller-mediated attachment.
+The controller gates every access path, including the API and preview
+listeners on all nodes
+that can serve or wake the sandbox, until wake, attach, and mount complete.
+Wake establishes only silkd readiness.
+It does not restore volume attachments or application readiness. Controller
+orchestration is external. The [controller example](volume-controller.md)
+shows the sequence, the pool replication and archive settings, and the
+reservation and access-gate contracts it requires. A change of owning node
+requires the controller to fence the old node before attaching the same backing
+on a new node, even when the claim ID is unchanged.
+Downgrading to a daemon without runtime registration requires draining runtime references or supplying equivalent
+static volume config. Pending live volume changes must finish before downgrade.
 
 Stale VM cleanup inspects attachments before removal. A complete running
 inventory retains holds only on the named volumes. An explicit empty disk
@@ -362,7 +407,7 @@ and cross-node ownership.
 
 ## GET /v1/sandboxes/{id}/volumes
 
-Returns the persisted desired set (`volumes_want`), confirmed applied set
+Returns the current desired set (`volumes_want`), confirmed applied set
 (`volumes`), per-volume `states`, and `converging`. Auth requires a client API
 token. Root can access every sandbox; a tenant can access only its own.
 Sandbox tokens are rejected when authentication is enabled. The owning node
@@ -382,8 +427,8 @@ when the volume is in both sets, `pending` when desired but not yet confirmed,
 or `detaching` when applied but no longer desired. An interrupted device call
 can leave the actual guest state different from the confirmed set. A failed
 PUT or PATCH adds a top-level `error` naming the refusal, and the affected
-state may carry its own `error`. `converging` is true while a request worker is running or a recovery-only
-reference awaits an acknowledged claim write.
+state may carry its own `error`. `converging` is true while a request worker
+is running or a recovery-only reference awaits an acknowledged claim write.
 `pending` with `converging: false` requires an explicit retry; there is no
 background convergence. GET retains the last safe per-volume error for the
 current daemon lifetime. After daemon restart, unfinished states report an
@@ -393,22 +438,32 @@ The sandbox index exposes both sets for operator inspection.
 ## PUT /v1/sandboxes/{id}/volumes
 
 Replaces the full desired set and converges synchronously. Auth matches GET.
-The owner tenant's catalog access list applies to newly admitted names, including
-for root. Retaining, repairing, or removing held names does not reauthorize
+For static and runtime entries, the claim owner's access list applies to
+newly admitted names, including when root sends the request. An empty list
+permits every authenticated scope.
+Retaining, repairing, or removing held names does not reauthorize
 them. A new image must exist on the owning node. The request must include a non-null `volumes`
-array. An explicit empty array removes all mutable entries.
+array. An explicit empty array removes all entries.
 
 ```json
 {"volumes": [{"name": "imagenet", "mount": "/datasets/training"}]}
 ```
 
-Only mounted read-only catalog entries can change live (`mode` omitted or
-`ro`). A PUT must retain every existing writable or attach-only entry unchanged.
+Mounted read-only, mounted writable, attach-only read-only, and attach-only
+writable entries can be added or removed live. `mode` defaults to read-only;
+`rw` requires a writable catalog entry and excludes other readers and writers.
+Set `attach_only: true` on an entry to attach its device without mounting it.
+A nonempty `mount` with that flag is invalid. The legacy claim-wide
+`volumes_attach_only` flag still applies to every entry in a new claim.
 The claim-time name, mount, and eight-volume limits apply to the desired set.
-An omitted mount defaults to `/volumes/<name>`, except that a held attach-only
-entry is retained by sending it as the claim returned it, without `mount`. To
-change an existing name's
-mount or mode, first remove that name and wait for successful convergence.
+A new entry without `attach_only: true` and with omitted `mount` defaults to
+`/volumes/<name>`. HTTP responses include `attach_only: true` and omit `mount`
+for device-only entries. GET's desired list can be echoed to the same sandbox.
+For an existing held mountless entry, an empty or omitted mount with an omitted
+or false `attach_only` preserves the attach-only shape. Explicit false is
+equivalent to omission here. It does not request a change to a managed mount.
+To change an existing name's nonempty mount, mode, or mounted shape, first
+remove that name and wait for successful convergence.
 An identical target can be retried. Claims with `on_expire: archive` must change
 that policy before adding a volume.
 
@@ -432,12 +487,33 @@ unchanged. An empty patch retries the current desired set.
 ```
 
 Adding an identical entry or removing an absent valid name is harmless.
-Duplicate names, a name in both arrays, or changes to writable or attach-only
-entries return 400. Removal refuses busy or foreign mounts and uses neither
+Duplicate names, a name in both arrays, or changes to an existing held entry's
+mount, mode, or attach-only shape return 400. Removal refuses busy or foreign mounts and uses neither
 lazy nor forced unmount. A foreign mount, another bind mount, or a completed
 ordinary unmount with nonzero exit returns 409 with the guest mount path and
 a safe per-volume reason. Guest transport failures remain server errors;
 timeouts return 504 and cancellation returns 408.
+
+For attach-only entries, the caller must stop writes and unmount before detach.
+The daemon refuses mounts it can observe for the device; it does not unmount a
+caller-managed filesystem. That probe does not establish that raw block users,
+partitions, or other mount namespaces are idle. The controller owns those
+conditions.
+
+Mounted writable entries receive a dirty marker before attachment. Live removal
+clears it only after sandboxd identifies the expected device at its managed root
+mount and observes writable options for both that mount and its superblock.
+The same removal must complete a normal unmount, confirm no remaining device
+mounts, and receive successful host detach. Marker cleanup finishes before
+writer admission is released. Missing, malformed, or read-only mount evidence
+cannot prove a clean unmount.
+An already absent device, an externally unmounted filesystem, or uncertain
+host removal supplies no clean-unmount evidence. Detach can complete while the
+marker remains, and a later read-only request can return 409 requiring recovery.
+A marker-file removal failure is logged and retains the conservative marker.
+Attach-only writers have no daemon-managed dirty marker, even after a guest
+crash during writes. Their caller owns filesystem recovery and safe read-only
+publication.
 
 ### Partial failure and recovery
 
@@ -452,6 +528,39 @@ retrying. Retry the same PUT to converge, or send a new
 target to abandon unfinished additions. Concurrent requests serialize per
 sandbox without blocking renewals or new exec, file, and port connections.
 
+Adding a live RW volume requires a pool with `replicate_seconds: 0`. A
+replicating pool returns 409 `live writable volumes require a non-replicating
+pool` before recording the new target, reserving the volume, or changing devices.
+This restriction applies to live additions, including attach-only RW. An RW
+volume attached in the initial claim remains supported, and existing RW volumes
+can be retained or removed while replication is configured. RO live changes
+remain available. The effective pool is the claim's policy source when it has
+one. Changing `replicate_seconds` requires a daemon restart.
+
+A non-replicating pool can still have an existing or pending replica after a
+restart. Live RW additions return 503 with `Retry-After` until that claim's
+replicas and recovery checkpoint references have retired. The background scan
+retires existing replicas; keep the controller's reservation and access gate
+closed, then retry the request. A failed claim write retains the affected
+checkpoint reference until a successful snapshot acknowledges its removal.
+Unrelated claims' writes and checkpoint references do not refuse this
+attachment. Without `archive_failover`, live RW additions return 409 while the
+claim retains replica or archive intent fields. See
+[disabling archive failover](deploy.md#disabling-archive-failover) for transition
+checks, local archive exceptions, and recovery risks.
+
+A retry of an admitted desired volume completes that operation without creating
+a new admission. Its volume hold continues to prevent replica publication.
+After a request ends, `converging` is false unless ordinary recovery-reference
+retirement remains active; no background worker attaches the desired disk.
+
+Consumed replica rows, unpublished checkpoints and queued deletion markers are
+retained while the affected checkpoint remains in a current claim projection,
+an acknowledged snapshot, or an attempted replacement whose result is uncertain.
+A later acknowledged snapshot retires removed references and permits cleanup.
+Checkpoint deletion waits only for actual references to that checkpoint, not
+for a node-wide pause in claim writes.
+
 Before applying a target, sandboxd journals `VolumesWant` beside `Volumes`,
 storing it only while it differs from `Volumes`. A
 superseding request may first clean up an older desired-only attachment while
@@ -462,8 +571,13 @@ teardown; a teardown keeps them until the VM is confirmed gone. Failed or
 uncertain operations retain their holds until successful cleanup. Startup
 reserves those holds without replaying attachments. Release cancels convergence and transfers the held union to teardown without waiting
 for a blocked device call. Capture operations (hibernate, fork, checkpoint, and
-promote) are refused while either set is nonempty or a convergence request
-still owns admitted volume holds.
+promote) are refused while either set is nonempty, a convergence request
+still owns admitted volume holds, or unacknowledged recovery references remain.
+
+A successful removal response confirms device removal and retirement of the
+old recovery reference. After an error or timeout, GET helps select the next
+retry, but an empty view alone does not prove that retirement completed.
+Retry the removal successfully before hibernating.
 
 Device calls honor cancellation and have a 30-second ceiling per volume; a
 caller that disconnects cancels the run, leaving interrupted states to retry. Journal writes

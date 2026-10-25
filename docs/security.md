@@ -99,8 +99,8 @@ both static and runtime entries. A nonempty list grants the named tenants
 self-service access. For live additions, the claim owner must satisfy the
 entry's ACL, even when root sends the request. Runtime registration rejects
 invalid tenant names. Static config warns and skips them. A nonempty static
-list with no valid names permits no tenant access. A valid name that does not
-yet identify a tenant grants no access until that tenant exists.
+list with no valid names permits no tenant access. A valid name that
+does not yet identify a tenant grants no access until that tenant exists.
 Claim lookup returns byte-identical errors for an unknown and a forbidden name, and catalog discovery filters before replying, so a tenant
 cannot enumerate restricted entries by probing. Gossip carries names only.
 Neither gossip, discovery, persisted claims, usage events, nor the sandbox index
@@ -112,6 +112,14 @@ mode 0600 and the daemon's filesystem permissions. Registration uses the
 same path validation as static configuration. It does not verify backing type
 or pin backing identity. Operators must supply a backing supported by Cocoon,
 prevent path or symlink target replacement while registered, and coordinate aliases.
+
+Mounted writable volumes use a dirty sidecar at the configured path plus `.dirty`.
+The sidecar directory must be writable and retain the marker across host restarts.
+Paths directly under ephemeral directories such as `/dev` do not provide that guarantee.
+An operator-controlled symlink in a durable directory keeps the sidecar beside
+that symlink, but alternate paths to the same backing still need operator coordination.
+Block-device backends are not qualified by registration. Attach-only writable
+volumes have no dirty marker and require external consistency checks.
 
 Read-only is integrity protection for the shared image, not confidentiality.
 Mounting a dataset into an egress-lane sandbox gives that sandbox an export path
@@ -129,18 +137,43 @@ API token. A sandbox token cannot, so a guest holding its own sandbox token
 cannot attach another dataset, and every addition passes the same access list
 as a claim. Already-held references can finish repair or removal without a
 new ACL grant. A recovery-only reference protects ownership and does not grant
-permission for a fresh attachment.
+permission for a fresh attachment. Keep `api_token` configured to authenticate network callers.
+An ACL does not reserve a detached disk across sleep. The controller must retain that reservation and gate workload access.
 
 A writable entry (`writable: true`) adds a channel the read-only model does
 not have: whichever tenant is permitted to claim it `rw` changes what every
 other permitted tenant reads next, and any of them can be the writer in
 turn — a multi-tenant access list on a writable entry is a bidirectional
 channel between those tenants, not just a shared read. Recommend a writable
-entry's `tenants` name exactly one tenant — an empty list permits every
-authenticated scope, which for a writable entry means every tenant can write
-to every other tenant's next read. A dataset that genuinely needs multiple
-writers needs an out-of-band process for who writes when, which the catalog
-ACL does not provide.
+entry's `tenants` name exactly one tenant when tenant self-service is intended.
+An empty static or runtime list permits every tenant to write to other
+tenants' next reads. A dataset that needs multiple writers needs an external
+process for who writes when, which the catalog ACL does not provide.
+
+Live writable and attach-only changes enforce the same catalog ACL and local
+reader and writer admission as initial claims. Attach-only callers own quiescence,
+unmount, and filesystem consistency. Guest mountinfo checks do not prove the
+absence of raw block users, partition users, or users in other mount namespaces.
+A mounted writable dirty marker is cleared only when the same removal observes
+the expected device at the managed root mount, writable mount and superblock
+options, successful normal unmount, no residual device mounts, and confirmed
+host detach. Marker cleanup precedes release of the old hold. Missing evidence
+leaves the marker in place.
+
+sandboxd writes and clears no daemon-managed marker for attach-only `rw`, even
+when the guest crashes while writing. Local reader and writer exclusion does not prove
+the image is consistent after detach or release. A later `ro` claim can be
+admitted without a marker. The controller must recover and verify the image
+before read-only publication.
+
+An external controller owns stop-write and unmount before detach, its own
+reservation across sleep, and access gating until wake, attach, and mount
+complete. Wake establishes silkd readiness, and business traffic may trigger
+it. Gate the API and preview listeners on every node that can serve the claim.
+Previously issued preview URLs can still wake it. Node-local admission does not
+fence a writer on another node. Follow the [controller example](volume-controller.md)
+for replication, archiving, ownership changes, and recovery. The controller
+supplies the reservation and access gate. See the [API contract](sandboxd-api.md#delete-v1volumesname).
 
 ## Known limitations
 

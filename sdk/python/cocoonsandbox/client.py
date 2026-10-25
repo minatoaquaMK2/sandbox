@@ -18,6 +18,7 @@ from .endpoint import _endpoint_url
 from .errors import APIError, SandboxTimeout, require_field
 from .sandbox import Sandbox
 from .template import _claim_body, _template_query
+from .volumes import Volume
 
 T = TypeVar("T")
 
@@ -60,7 +61,7 @@ class Client:
         size: str = "",
         ttl_seconds: int = 0,
         claim_ref: str = "",
-        volumes: list[str | Mapping[str, str]] | None = None,
+        volumes: Iterable[str | Mapping[str, str | bool] | Volume] | None = None,
         mount: bool = True,
         *,
         deadline: float | None = None,
@@ -109,7 +110,7 @@ class Client:
     def sandboxes(self) -> list[dict[str, Any]]:
         """Lists the claims this token may see: id, key, deadline, claim_ref — never tokens or host paths."""
         reply = self._request(self.addr, "GET", "/v1/sandboxes", None, "list sandboxes")
-        return [dict(sb) for sb in reply.get("sandboxes") or []]
+        return cast("list[dict[str, Any]]", reply.get("sandboxes") or [])
 
     def drain(self) -> dict[str, Any]:
         """Cordons the node (root token): new claims are refused, live ones run to their leases."""
@@ -217,11 +218,17 @@ class Client:
                 reply = json.loads(raw)
             except (ValueError, TypeError):
                 reply = None
-            raise APIError(verb, status, _error_message(raw), reply=reply if isinstance(reply, dict) else None)
+            raise APIError(
+                verb,
+                status,
+                _error_message(raw),
+                reply=reply if isinstance(reply, dict) else None,
+            )
         if not raw:
             return {}
         try:
-            return cast(dict[str, Any], json.loads(raw))
+            reply = json.loads(raw)
+            return cast(dict[str, Any], reply)
         except json.JSONDecodeError as exc:
             raise APIError(verb, 0, "malformed JSON in response") from exc
 

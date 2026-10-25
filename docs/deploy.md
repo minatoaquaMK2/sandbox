@@ -167,6 +167,34 @@ fragment the warm pools):
 | `xlarge` | 4 | 8G |
 | `2xlarge` | 8 | 16G |
 
+### Disabling archive failover
+
+Before changing `archive_failover`, verify local claim ownership and the
+corresponding remote rows from a node with registry access.
+Set `replicate_seconds: 0` while `archive_failover` is still enabled, then
+restart, so the replica scan retires existing replicas. Disabling
+`archive_failover` does not consume remote rows or fence other nodes. Drain
+this node's rows from a node that still has the registry, or keep peers that
+run with `archive_failover` from adopting its claims.
+
+Disable `archive_failover` only after those replicas have retired. If claims
+still carry `ReplicaCk`, `ReplicaPending`, or `ArchivePending`, startup without
+a registry retains those fields and refuses new live writable volume additions
+with 409 while any of them remain. Release and default destroy-on-expiry leave
+replica checkpoints in the checkpoint store. A successful local archive,
+including archive-on-expiry, clears `ReplicaCk` and `ArchivePending` and queues
+the published replica checkpoint for deletion. It retains `ReplicaPending`,
+which continues to refuse live writable additions after wake. Once the current
+fields clear, recovery checkpoint references can still require temporary 503
+retirement before admission.
+
+Re-enabling `archive_failover` does not guarantee recovery of a retained claim.
+Before re-enabling it, verify that a published replica's row still exists,
+belongs to this node, and can be retired. If the row is absent, was drained, or
+has moved to another owner, choose an explicit recovery procedure before the
+transition. Startup fencing can drop the local claim, and reconciliation can
+remove its VM, losing changes since the last checkpoint.
+
 ### Reading sleeping claims without waking them
 
 A client that only lists or reads files (a UI showing an idle agent's
@@ -248,12 +276,13 @@ the pool had `reader`, and its reads wake the claim as without the feature.
 ### Dataset volumes
 
 Volume `tenants` entries use the tenant API name syntax. Static configuration
-warns about invalid names and skips them during access checks. A nonempty list containing
-only invalid names grants no tenant access. Runtime registration rejects invalid
-tenant names. Valid names for tenants that have not yet been created remain
-accepted.
+warns about invalid names and skips them during access checks. A nonempty list
+containing only invalid names grants no tenant access. Runtime registration
+rejects invalid tenant names. Valid names for tenants that have not yet been
+created remain accepted.
 
-Running claims can change mounted read-only catalog entries through the
+Running claims can add or remove mounted and attach-only catalog entries in
+read-only or writable mode through the
 [GET, PUT, and PATCH volume API](sandboxd-api.md#get-v1sandboxesidvolumes)
 and both SDKs. The image must already exist on the owner node. Live changes
 require Cocoon v0.7.2 or newer for idempotent disk attach and detach. PUT and
@@ -266,8 +295,8 @@ The claim journal stores confirmed applied `Volumes`, plus desired
 `VolumesWant` while it differs.
 Admission holds cover their union across daemon restart and teardown. Retry
 an interrupted operation with the same PUT target. Release cancels convergence
-and transfers holds to teardown. Capture is refused while either set is
-nonempty.
+and transfers holds to teardown. Capture is refused while either set, an active
+operation, or unacknowledged recovery references still hold volumes.
 
 A sandbox whose VMM exits while holding volumes is release-only. Release it and
 create a new sandbox. Daemon restart recovery assumes the original VMM remains
@@ -278,8 +307,9 @@ interrupted diagnostic after restart and require a caller retry.
 exercises GET, repeated full-set PUT, PATCH add and remove, and clearing a new
 claim.
 
-Each catalog path must name a disk image containing a mountable whole-device
-filesystem. Keep catalog names bound to the same image while any claim holds
+Mounted entries need a disk image containing a mountable whole-device
+filesystem. Attach-only entries leave device use and filesystem consistency
+to the caller. Keep catalog names bound to the same image while any claim holds
 them. Use versioned names such as `dataset-v1` and
 `dataset-v2`; sandboxd cannot detect a repointed catalog entry. A read-only
 entry's image must stay immutable: do not replace,
@@ -310,9 +340,11 @@ A volume claim may consume an ordinary warm Cloud Hypervisor VM. sandboxd
 attaches after the warm pop or provision, waits for the device settle — a
 serial match under `/sys/block`, then the `/dev/<name>` node itself, since the
 kernel publishes sysfs before devtmpfs creates it — up to 2 seconds, then
-mounts the device before finalizing the claim: `mode: "ro"` (the default)
-attaches and mounts read-only; `mode: "rw"` requires the catalog entry's
-`writable: true` and attaches and mounts read-write. Setup failure destroys
+mounts each managed device before finalizing the claim. `mode: "ro"` (the default)
+attaches read-only; `mode: "rw"` requires the catalog entry's
+`writable: true` and attaches read-write. Per-entry `attach_only: true`, or
+claim-wide `volumes_attach_only: true`, skips the device wait and mount. The
+caller must wait for enumeration before using that device. Setup failure destroys
 the VM without quiescing — the claim was never handed out, so no workload
 write happened — and a popped warm VM is refilled normally.
 
@@ -320,8 +352,8 @@ A multi-volume claim brings every volume up concurrently: each volume's own
 marker→attach→mount order is preserved, but cocoon serializes the hypervisor
 attach per VM, so what actually overlaps across volumes is the CLI spawns,
 device settles, and guest mounts. A partial failure still fails the whole
-claim and destroys the VM without quiescing, so any `rw` volume already
-attached keeps its dirty marker — including one the caller never got a handle
+claim and destroys the VM without quiescing, so any mounted `rw` volume already
+attached keeps its dirty marker, including one the caller never got a handle
 to; recovery is the normal `rw` cycle (see
 [Writable dataset volumes](#writable-dataset-volumes)).
 
@@ -332,25 +364,27 @@ in [cluster](cluster.md#volumes-and-placement).
 An empty catalog `tenants` list allows every authenticated scope; a nonempty
 list limits the image to those claim owners. Root-owned claims can use any
 entry. Live additions use the claim owner's ACL, including requests sent by root. A
-listed tenant the set no longer holds grants nothing and logs a warning at
-boot.
+valid tenant name that does not yet exist grants nothing and logs a warning
+at boot. Static config warns and skips invalid tenant names. Runtime
+registration rejects invalid tenant names.
 `GET /v1/volumes` reports the caller-visible fleet union and holder count, plus
 the answering node's current local availability and whether the entry is
 `writable`, without exposing host paths or node addresses. Applied names,
 effective mounts, and (for `rw` entries) mode are persisted with the claim.
-Such a claim cannot hibernate, fork, checkpoint, or promote; the idle
-hibernate sweep leaves it running. Release removes the VM but never deletes
-the operator-owned backing image — an `rw` release quiesces (unmounts) first,
+While volume holds or unacknowledged recovery references remain, a claim cannot
+hibernate, fork, checkpoint, or promote. The idle hibernate sweep leaves it
+running. Release removes the VM but never deletes
+the operator-owned backing image. A mounted `rw` release quiesces (unmounts) first,
 below. With `directio=off`, readers share the host page cache; use
 `directio=on` when cache interference matters.
 A dataset mounted into an egress-lane sandbox can be uploaded wherever that
 tenant's egress policy permits, so treat the ACL and egress policy as one access
-decision. Image replication, detach, and refcounting remain out of scope.
+decision. Image replication and business ownership remain external to sandboxd.
 
 #### Writable dataset volumes
 
-A catalog entry with `writable: true` may be claimed with `mode: "rw"`
-(omitted, or `"ro"`, always mounts read-only, even against a writable entry).
+A catalog entry with `writable: true` may be claimed with `mode: "rw"`.
+Omitted mode, or `"ro"`, attaches read-only, even against a writable entry.
 `directio` still defaults to `off` for a writable entry — the durability
 nuance is that the host page cache sits between the guest's flush and the
 device, so `directio=on` is the knob when that gap matters, not just cache
@@ -363,7 +397,7 @@ so every claim for that name, `ro` or `rw`, already funnels to that one node;
 running the same writable name from two nodes at once is dataset divergence
 that nothing in the protocol detects for you.
 
-**The `<path>.dirty` marker.** Before the first `rw` attach of an image,
+**The `<path>.dirty` marker.** Before a mounted `rw` attach of an image,
 sandboxd durably creates a `<path>.dirty` sidecar beside it; a clean `rw`
 release removes it. It is a write-ahead record, not a lock: it survives a
 killed sandboxd or a dead VMM, so anything short of a clean unmount leaves it
@@ -376,6 +410,13 @@ can serve `ro` again. A `ro` claim against a dirty image is refused rather
 than auto-healed: replaying the journal takes the write lock, which conflicts
 with concurrent readers.
 
+Live removal clears a mounted writer's marker only with current-call evidence
+of the expected device at the managed root mount, writable mount and
+superblock options, normal unmount, no remaining device mounts, and confirmed
+host detach. Marker cleanup precedes release of the old hold. A prior external
+unmount or absent device provides no such evidence. Detach can succeed while
+the marker remains and read-only use still requires recovery.
+
 **Concurrency, for one image name:**
 
 - `rw` ∥ `rw` — refused (409).
@@ -387,17 +428,13 @@ with concurrent readers.
   proceed; a crashed writer leaves it, and `ro` claims are refused until one
   `rw` claim replays and releases cleanly.
 
-**Attach-only claims opt out of the marker, not out of admission.** A claim
-sent with `volumes_attach_only` gets the device attached and nothing else, so
-sandboxd neither writes nor clears `<path>.dirty` for it — it cannot verify a
-mount it did not perform. Everything in this section still applies to the
-default, mounting claims, and the exclusion rules above apply to attach-only
-claims exactly the same way, which is what keeps other tenants safe. The
-operator-visible difference: an image whose attach-only writer released
-without unmounting cleanly carries no marker, so the next `ro` claim is
-admitted and fails at mount time (500) instead of being refused early (409).
-Whoever hands out attach-only `rw` access owns that trade; see
-[sandboxd-api](sandboxd-api.md#attach-only-volumes).
+**Attach-only entries have no daemon-managed dirty marker.** This applies to
+both initial claims and live additions. sandboxd neither writes nor clears
+`<path>.dirty` for attach-only `rw`, including a guest crash during writes.
+Reader and writer exclusion still applies, but a later `ro` claim can be
+admitted without a marker and may see an inconsistent filesystem. Mount failure
+is not guaranteed. The controller owns quiescence, unmount, crash recovery,
+and safe read-only publication. See the [attach-only contract](sandboxd-api.md#attach-only-volumes).
 
 ### Reclaiming S3 storage
 

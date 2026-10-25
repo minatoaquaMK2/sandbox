@@ -54,7 +54,7 @@ func TestLiveVolumeConvergesMountAndDetach(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if err := e.DetachVolume(t.Context(), "sbx-1", sock, spec.Name, tt.mount); err != nil {
+			if _, err := e.DetachVolume(t.Context(), "sbx-1", sock, spec.Name, tt.mount); err != nil {
 				t.Fatal(err)
 			}
 			fake.mu.Lock()
@@ -69,6 +69,48 @@ func TestLiveVolumeConvergesMountAndDetach(t *testing.T) {
 			args, err := os.ReadFile(os.Getenv("COCOON_TEST_ATTACH_ARGS"))
 			if err != nil || !strings.Contains(string(args), "--readonly --directio off") {
 				t.Fatalf("attach args=%s error=%v", args, err)
+			}
+		})
+	}
+}
+
+func TestLiveVolumeAcceptsEmptyMountSource(t *testing.T) {
+	for _, tt := range []struct {
+		name, mount string
+		rw          bool
+	}{
+		{name: "mounted read-only", mount: "/data"},
+		{name: "mounted writable", mount: "/data", rw: true},
+		{name: "attach-only"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			sock := sockPath(t)
+			fake := serveFakeSilkd(t, sock)
+			configureVolumeDevices(fake)
+			spec := liveDiskCLI(t, "")
+			const unrelated = "501 84 0:62 / /empty-source rw,relatime - tmpfs  rw,size=1024k,inode64\n"
+			fake.mu.Lock()
+			fake.serial["/sys/block/vdc/dev"] = []byte("8:32\n")
+			fake.serial["/proc/self/mountinfo"] = []byte(rootMountInfo + unrelated)
+			fake.execHook = func(argv []string) {
+				switch argv[0] {
+				case "mount":
+					mode := mountMode(tt.rw)
+					fake.serial["/proc/self/mountinfo"] = []byte(rootMountInfo + unrelated + "2 1 8:32 / /data " + mode + " - ext4 /dev/vdc " + mode + "\n")
+				case "umount":
+					fake.serial["/proc/self/mountinfo"] = []byte(rootMountInfo + unrelated)
+				}
+			}
+			fake.mu.Unlock()
+			e := New("cocoon", nil, nil, false, false, "")
+			if tt.mount != "" {
+				if err := e.MountLiveVolume(t.Context(), sock, spec.Name, tt.mount, tt.rw); err != nil {
+					t.Fatalf("mount with unrelated empty source: %v", err)
+				}
+			}
+			result, err := e.DetachVolume(t.Context(), "sbx-1", sock, spec.Name, tt.mount)
+			if err != nil || result.NormalUnmount != tt.rw {
+				t.Fatalf("detach with unrelated empty source: result=%+v err=%v", result, err)
 			}
 		})
 	}
@@ -191,7 +233,7 @@ func TestLiveDetachKeepsBusyAndUnobservableDevices(t *testing.T) {
 				fake.serial["/proc/self/mountinfo"] = []byte(rootMountInfo + "2 1 8:32 / /data ro - ext4 /dev/vdc ro\n3 2 8:32 /sub /data ro - ext4 /dev/vdc ro\n")
 			}
 			fake.mu.Unlock()
-			err := New("cocoon", nil, nil, false, false, "").DetachVolume(t.Context(), "sbx-1", sock, spec.Name, "/data")
+			_, err := New("cocoon", nil, nil, false, false, "").DetachVolume(t.Context(), "sbx-1", sock, spec.Name, "/data")
 			if err == nil {
 				t.Fatal("detach must fail closed")
 			}
@@ -222,7 +264,7 @@ func TestLiveDetachMissingGuestStillChecksHost(t *testing.T) {
 			sock := sockPath(t)
 			serveFakeSilkd(t, sock)
 			spec := liveDiskCLI(t, hostErr)
-			err := New("cocoon", nil, nil, false, false, "").DetachVolume(t.Context(), "sbx-1", sock, spec.Name, "/data")
+			_, err := New("cocoon", nil, nil, false, false, "").DetachVolume(t.Context(), "sbx-1", sock, spec.Name, "/data")
 			wantErr := hostErr != ""
 			if (err != nil) != wantErr {
 				t.Fatalf("got %v, want error=%v", err, wantErr)
@@ -240,13 +282,78 @@ func TestLiveDetachIgnoresAnotherDeviceAtThePath(t *testing.T) {
 	fake.serial["/sys/block/vdc/dev"] = []byte("8:32\n")
 	fake.serial["/proc/self/mountinfo"] = []byte(rootMountInfo + "2 1 8:48 / /data ro - ext4 /dev/vdd ro\n")
 	fake.mu.Unlock()
-	if err := New("cocoon", nil, nil, false, false, "").DetachVolume(t.Context(), "sbx-1", sock, spec.Name, "/data"); err != nil {
+	if _, err := New("cocoon", nil, nil, false, false, "").DetachVolume(t.Context(), "sbx-1", sock, spec.Name, "/data"); err != nil {
 		t.Fatalf("detach of an unmounted device blocked by another device's mount: %v", err)
 	}
 	fake.mu.Lock()
 	defer fake.mu.Unlock()
 	if changes := guestChanges(fake.execCalls); len(changes) != 0 {
 		t.Fatalf("touched another device's mount: %v", changes)
+	}
+}
+
+func TestLiveDetachCleanEvidenceRequiresWritableUnmountAndHostSuccess(t *testing.T) {
+	for _, mode := range []string{"normal", "readonly", "mount readonly", "contradictory mount", "superblock readonly", "contradictory superblock", "empty option", "unordered writable options", "missing superblock options", "extra superblock fields", "pre-unmounted", "missing device", "host failure", "busy", "residual mount", "attach-only mounted"} {
+		t.Run(mode, func(t *testing.T) {
+			sock := sockPath(t)
+			fake := serveFakeSilkd(t, sock)
+			if mode != "missing device" {
+				configureVolumeDevices(fake)
+			}
+			hostErr := ""
+			if mode == "host failure" {
+				hostErr = "host removal failed after unmount"
+			}
+			spec := liveDiskCLI(t, hostErr)
+			mount := "/data"
+			fake.mu.Lock()
+			fake.serial["/sys/block/vdc/dev"] = []byte("8:32\n")
+			fake.serial["/proc/self/mountinfo"] = []byte(rootMountInfo + "2 1 8:32 / /data rw - ext4 /dev/vdc rw\n")
+			switch mode {
+			case "pre-unmounted", "missing device":
+				fake.serial["/proc/self/mountinfo"] = []byte(rootMountInfo)
+			case "readonly":
+				fake.serial["/proc/self/mountinfo"] = []byte(rootMountInfo + "2 1 8:32 / /data ro - ext4 /dev/vdc ro\n")
+			case "mount readonly":
+				fake.serial["/proc/self/mountinfo"] = []byte(rootMountInfo + "2 1 8:32 / /data ro - ext4 /dev/vdc rw\n")
+			case "contradictory mount":
+				fake.serial["/proc/self/mountinfo"] = []byte(rootMountInfo + "2 1 8:32 / /data rw,ro - ext4 /dev/vdc rw\n")
+			case "empty option":
+				fake.serial["/proc/self/mountinfo"] = []byte(rootMountInfo + "2 1 8:32 / /data rw,,relatime - ext4 /dev/vdc rw\n")
+			case "superblock readonly":
+				fake.serial["/proc/self/mountinfo"] = []byte(rootMountInfo + "2 1 8:32 / /data rw - ext4 /dev/vdc ro,errors=remount-ro\n")
+			case "contradictory superblock":
+				fake.serial["/proc/self/mountinfo"] = []byte(rootMountInfo + "2 1 8:32 / /data rw - ext4 /dev/vdc rw,ro\n")
+			case "unordered writable options":
+				fake.serial["/proc/self/mountinfo"] = []byte(rootMountInfo + "2 1 8:32 / /data relatime,rw shared:4 - ext4 /dev/vdc errors=remount-ro,rw\n")
+			case "missing superblock options":
+				fake.serial["/proc/self/mountinfo"] = []byte(rootMountInfo + "2 1 8:32 / /data rw shared:4 - ext4 /dev/vdc\n")
+			case "extra superblock fields":
+				fake.serial["/proc/self/mountinfo"] = []byte(rootMountInfo + "2 1 8:32 / /data rw - ext4 /dev/vdc rw extra\n")
+			case "busy":
+				fake.execCode = 32
+			case "attach-only mounted":
+				mount = ""
+			}
+			fake.execHook = func(argv []string) {
+				if argv[0] == "umount" && mode != "residual mount" && mode != "busy" {
+					fake.serial["/proc/self/mountinfo"] = []byte(rootMountInfo)
+				}
+			}
+			fake.mu.Unlock()
+			result, err := New("cocoon", nil, nil, false, false, "").DetachVolume(t.Context(), "sbx-1", sock, spec.Name, mount)
+			wantErr := slices.Contains([]string{"host failure", "busy", "residual mount", "attach-only mounted", "missing superblock options", "extra superblock fields"}, mode)
+			if (err != nil) != wantErr || result.NormalUnmount != (mode == "normal" || mode == "unordered writable options") {
+				t.Fatalf("mode=%s result=%+v err=%v", mode, result, err)
+			}
+			if mode == "attach-only mounted" {
+				fake.mu.Lock()
+				defer fake.mu.Unlock()
+				if len(guestChanges(fake.execCalls)) != 0 {
+					t.Fatal("attach-only detach unmounted a caller-managed filesystem")
+				}
+			}
+		})
 	}
 }
 

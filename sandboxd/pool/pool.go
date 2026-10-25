@@ -102,6 +102,11 @@ var (
 	ErrNoEgressFork      = errors.New("egress-lane sandboxes cannot fork, checkpoint, or promote: a resumed guest egresses before its fresh tap can be locked")
 	ErrVolumeCapture     = errors.New("sandboxes with volumes cannot hibernate, fork, checkpoint, or promote")
 	ErrVolumeBusy        = errors.New("volume is held by another claim")
+
+	ErrReplicaPresent  = errors.New("live writable attachment requires replica and recovery checkpoint retirement")
+	ErrReplicatingPool = errors.New("live writable volumes require a non-replicating pool")
+	ErrReplicaStranded = errors.New("live writable attachment is blocked by retained replica or archive state with archive_failover disabled")
+
 	// Replaying a journal takes a writable mount, so readers stay out.
 	ErrVolumeNeedsRecovery = errors.New("volume needs recovery by a writable claim")
 	ErrArchived            = errors.New("sandbox is archived; an exec or file call wakes it first")
@@ -149,7 +154,7 @@ type Engine interface {
 	TrimCow(ctx context.Context, vsockSocket string) error
 	CheckLiveVolumeSupport(ctx context.Context) error
 	DiskAttach(ctx context.Context, vmName string, spec engine.VolumeSpec) error
-	DetachVolume(ctx context.Context, vmName, sock, name, mount string) error
+	DetachVolume(ctx context.Context, vmName, sock, name, mount string) (engine.VolumeDetachResult, error)
 	MountVolume(ctx context.Context, vsockSocket, name, mount string, rw bool) error
 	MountLiveVolume(ctx context.Context, vsockSocket, name, mount string, rw bool) error
 	UnmountVolume(ctx context.Context, vsockSocket, mount string) error
