@@ -172,20 +172,33 @@ func TestFailoverDisabledExitKeepsReplicaCheckpoint(t *testing.T) {
 		}},
 	}
 	exits := []struct {
-		name string
-		run  func(t *testing.T, m *Manager, sb *types.Sandbox)
+		name       string
+		keepsClaim bool
+		run        func(t *testing.T, m *Manager, sb *types.Sandbox)
 	}{
-		{"release", func(t *testing.T, m *Manager, sb *types.Sandbox) {
+		{"release", false, func(t *testing.T, m *Manager, sb *types.Sandbox) {
 			if err := m.Release(t.Context(), sb.ID, Cred{Token: sb.Token}); err != nil {
 				t.Fatal(err)
 			}
 		}},
-		{"expire", func(t *testing.T, m *Manager, sb *types.Sandbox) {
+		{"expire", false, func(t *testing.T, m *Manager, sb *types.Sandbox) {
 			m.mu.Lock()
 			sb.Deadline = time.Now().Add(-time.Minute)
 			m.mu.Unlock()
 			m.reapOnce(t.Context())
 			waitFor(t, func() bool { return m.Counters().Reaps == 1 })
+		}},
+		{"wake refuses live writer", true, func(t *testing.T, m *Manager, sb *types.Sandbox) {
+			if err := m.Wake(t.Context(), sb.ID, Cred{Token: sb.Token}); err != nil {
+				t.Fatal(err)
+			}
+			if err := m.RegisterVolume(t.Context(), "data", types.VolumeRegistration{Path: writeVolumeImage(t, "data", "original"), Writable: true}); err != nil {
+				t.Fatal(err)
+			}
+			view, err := m.SetVolumes(t.Context(), sb.ID, "", []types.Volume{{Name: "data", Mode: types.VolumeModeRW, AttachOnly: true}})
+			if !errors.Is(err, ErrReplicaStranded) || len(view.Volumes) != 0 || len(view.VolumesWant) != 0 {
+				t.Fatalf("live writer on stranded failover state: err=%v volumes=%v want=%v", err, view.Volumes, view.VolumesWant)
+			}
 		}},
 	}
 	for _, state := range states {
@@ -214,7 +227,7 @@ func TestFailoverDisabledExitKeepsReplicaCheckpoint(t *testing.T) {
 					t.Fatalf("startup without a registry queued or deleted checkpoint %s", ck)
 				}
 				exit.run(t, m, restored)
-				if _, held := m.byID(sb.ID); held || !ckExists(t, m, ck) {
+				if _, held := m.byID(sb.ID); held != exit.keepsClaim || !ckExists(t, m, ck) {
 					t.Fatalf("%s without a registry: held=%t checkpoint kept=%t", exit.name, held, ckExists(t, m, ck))
 				}
 			})

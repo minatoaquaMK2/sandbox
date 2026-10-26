@@ -363,12 +363,14 @@ func TestClaimRecoveryVolumeOwnerExemptionRequiresExactAttachment(t *testing.T) 
 	reader.Mode = types.VolumeModeRO
 	moved := writer
 	moved.Mount = "/elsewhere"
+	raw := writer
+	raw.Mount, raw.AttachOnly = "", true
 	for _, tc := range []struct {
 		volume   types.Volume
 		owner    string
 		conflict bool
 	}{
-		{writer, sb.ID, false}, {writer, "different", true}, {reader, sb.ID, true}, {moved, sb.ID, true},
+		{writer, sb.ID, false}, {writer, "different", true}, {reader, sb.ID, true}, {moved, sb.ID, true}, {raw, sb.ID, true},
 	} {
 		if got := s.volumeConflicts(tc.volume, tc.owner); got != tc.conflict {
 			t.Errorf("volume %+v owner %q conflict=%t, want %t", tc.volume, tc.owner, got, tc.conflict)

@@ -405,6 +405,12 @@ func (s *claimStore) changeRetainedVolumes(id string, after []types.Volume) {
 	s.recoveryVolumesPresent.Store(len(s.volumes) != 0)
 }
 
+func (s *claimStore) hasCheckpointReferences(owner string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.refs[owner] != [4]string{} || len(s.retained[owner]) != 0
+}
+
 func (s *claimStore) referencesVolume(name string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -441,8 +447,7 @@ func (s *claimStore) detachingOwners() map[string]bool {
 	defer s.mu.Unlock()
 	var owners map[string]bool
 	for id := range s.changed {
-		retained := s.retained[id]
-		if len(s.currentRefs(id).volumes) == 0 && len(retained.acknowledged.volumes)+len(retained.attempted.volumes) != 0 {
+		if len(s.currentVolumes[id]) == 0 && len(s.retainedVolumes[id]) != 0 {
 			if owners == nil {
 				owners = map[string]bool{}
 			}
