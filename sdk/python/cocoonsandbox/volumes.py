@@ -57,11 +57,7 @@ def _volume_response(reply: dict[str, Any] | None) -> SandboxVolumesResponse | N
         or not isinstance(reply.get("converging"), bool)
     ):
         return None
-    view = dict(reply)
-    for key in ("volumes", "volumes_want"):
-        view[key] = [dict(volume) for volume in reply[key]]
-    view["states"] = [dict(state) for state in reply["states"]]
-    return cast(SandboxVolumesResponse, view)
+    return cast(SandboxVolumesResponse, reply)
 
 
 def _volume_bodies(
