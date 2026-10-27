@@ -1,5 +1,7 @@
 """Live volume HTTP contract and partial convergence recovery."""
 
+from collections import UserDict
+
 import pytest
 from conftest import FakeNode, sandbox_at
 
@@ -12,6 +14,18 @@ VIEW = {
     "converging": True,
     "states": [{"name": "data", "state": "attached"}],
 }
+
+
+def test_volume_mapping_is_json_encoded(spawn_node):
+    seen = []
+
+    def reply(body, path):
+        seen.append(body)
+        return 200, VIEW
+
+    sb = sandbox_at(spawn_node({("PUT", PATH): reply}))
+    sb.set_volumes([UserDict({"name": "data", "mount": "/data"})])
+    assert seen == [{"volumes": [{"name": "data", "mount": "/data"}]}]
 
 
 @pytest.mark.parametrize("method", ["GET", "PUT", "PATCH"])

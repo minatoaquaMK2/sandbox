@@ -63,4 +63,4 @@ def _volume_body(volume: str | Volume) -> Volume:
         return {"name": volume}
     if not isinstance(volume, Mapping):
         raise TypeError("volume must be a name string or mapping")
-    return volume.copy()
+    return cast(Volume, dict(volume))
