@@ -2,12 +2,13 @@ package pool
 
 import (
 	"errors"
-	"github.com/cocoonstack/sandbox/sandboxd/config"
-	"github.com/cocoonstack/sandbox/sandboxd/types"
 	"slices"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/cocoonstack/sandbox/sandboxd/config"
+	"github.com/cocoonstack/sandbox/sandboxd/types"
 )
 
 func TestReplicaRecoveryDoesNotRepublishReadOnlyHold(t *testing.T) {
@@ -138,7 +139,7 @@ func TestLiveWriterPolicyAndCheckpointRefusals(t *testing.T) {
 			m.store.set(sb)
 			m.archives = nil
 		}, ErrReplicaPresent},
-		{"unrelated checkpoint", func(m *Manager, sb *types.Sandbox) {
+		{"unrelated checkpoint", func(m *Manager, _ *types.Sandbox) {
 			disableReplication(m)
 			other := mustClaim(t, m, testKey)
 			other.ReplicaCk = "unrelated"

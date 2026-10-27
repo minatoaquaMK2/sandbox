@@ -434,10 +434,12 @@ unmount. The marker remains on uncertainty and blocks subsequent readers.
 Attach-only writers have no automatic dirty-marker protection. The caller owns
 mounting, flushing, unmounting, recovery, and fencing before reuse.
 
-The per-entry field requires coordinated daemon and SDK releases. Older
-responses without the field do not safely roundtrip attach-only intent through
-new clients. The server still accepts the legacy claim-wide request flag and
-normalizes old persisted empty mounts when loading claims.
+The per-entry field requires coordinated daemon and SDK releases. Older daemons
+can ignore `attach_only` in claims, and older Python SDKs reject the field when
+returned descriptors are reused in requests. Responses without the field do
+not safely roundtrip attach-only intent through new clients. The server still
+accepts the legacy claim-wide request flag and normalizes old persisted empty
+mounts when loading claims.
 
 ### Partial failure and recovery
 
