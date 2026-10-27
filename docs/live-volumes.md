@@ -13,8 +13,8 @@ A configured node root token can
 [register backing paths](sandboxd-api.md#put-v1volumesname) without editing
 static config. Registration persists only node-local catalog metadata and does
 not manage disk files. Runtime `tenants` lists follow the
-[access-list rule](sandboxd-api.md#volume-access-lists). Live changes remain
-limited to mounted read-only entries.
+[access-list rule](sandboxd-api.md#volume-access-lists). The API also supports
+[writable and attach-only entries](sandboxd-api.md#put-v1sandboxesidvolumes).
 
 Pause application reads before replacement. Close files, mmap mappings, cwd,
 and bind mount references on the old disk. Replacement unmounts the old disk
