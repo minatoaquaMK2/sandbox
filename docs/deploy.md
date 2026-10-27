@@ -248,9 +248,13 @@ the pool had `reader`, and its reads wake the claim as without the feature.
 
 ### Dataset volumes
 
-Running claims can change mounted read-only catalog entries through the
+Running claims can add or remove mounted and attach-only catalog entries in
+read-only or writable mode through the
 [GET, PUT, and PATCH volume API](sandboxd-api.md#get-v1sandboxesidvolumes)
-and both SDKs. The image must already exist on the owner node. Live changes
+and both SDKs. Changing a held entry's descriptor requires successful removal
+first. The [live volume contract](sandboxd-api.md#put-v1sandboxesidvolumes)
+defines admission policy and dirty-marker handling.
+The image must already exist on the owner node. Live changes
 require Cocoon v0.7.2 or newer for idempotent disk attach and detach. PUT and
 PATCH reject an older release, or a runtime whose version cannot be queried,
 with 503 before any intent, hold, or device change; a dev build is assumed
@@ -338,7 +342,8 @@ below. With `directio=off`, readers share the host page cache; use
 `directio=on` when cache interference matters.
 A dataset mounted into an egress-lane sandbox can be uploaded wherever that
 tenant's egress policy permits, so treat the ACL and egress policy as one access
-decision. Image replication, detach, and refcounting remain out of scope.
+decision. Operators remain responsible for image distribution and cross-node
+ownership. sandboxd tracks local holds and handles live detach through the volume API.
 
 #### Writable dataset volumes
 
