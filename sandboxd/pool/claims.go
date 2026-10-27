@@ -121,6 +121,11 @@ func (s *claimStore) load() (map[string]*types.Sandbox, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, sb := range claims {
+		for _, volumes := range [][]types.Volume{sb.Volumes, sb.VolumesWant} {
+			for i := range volumes {
+				volumes[i].AttachOnly = volumes[i].AttachOnly || volumes[i].Mount == ""
+			}
+		}
 		if sb.VolumesWant == nil {
 			sb.VolumesWant = sb.Volumes
 		}
@@ -388,6 +393,12 @@ func (s *claimStore) changeRetainedVolumes(id string, after []types.Volume) {
 		s.retainedVolumes[id] = after
 	}
 	s.anyRetainedVolume.Store(len(s.retainedVolumeCounts) != 0)
+}
+
+func (s *claimStore) hasCheckpointReferences(owner string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.refs[owner] != [4]string{} || len(s.retained[owner]) != 0
 }
 
 func (s *claimStore) referencesVolume(name string) bool {

@@ -14,82 +14,91 @@ import (
 )
 
 func TestUnacknowledgedDetachKeepsRecoveryReference(t *testing.T) {
-	eng := newFakeEngine()
-	m, sb := newTenantVolumeManager(t, eng, liveCatalog(t))
-	spec := types.VolumeRegistration{Path: writeVolumeImage(t, "home.img", "private"), Writable: true, Tenants: []string{"acme"}}
-	if err := m.RegisterVolume(t.Context(), "home", spec); err != nil {
-		t.Fatal(err)
-	}
-	want := []types.Volume{{Name: "home", Mount: "/home"}}
-	for _, caller := range []string{"", "acme"} {
-		if _, err := m.SetVolumes(t.Context(), sb.ID, caller, want); err != nil {
-			t.Fatal(err)
-		}
-	}
-	unblock := detachWithoutCommit(t, m, eng, sb.ID, "acme")
-	claims, err := newClaimStore(m.dataDir, false).load()
-	if err != nil || claims[sb.ID] == nil || !slices.Equal(claims[sb.ID].Volumes, want) {
-		t.Fatalf("old durable attachment missing: %+v, %v", claims, err)
-	}
-	view, err := m.GetVolumes(sb.ID, "")
-	if err != nil || len(view.States) != 1 || view.States[0].State != types.VolumeDetaching || !view.Converging {
-		t.Fatalf("unretired view: %+v, %v", view, err)
-	}
-	writer := ClaimOptions{Volumes: []types.Volume{{Name: "home", Mode: types.VolumeModeRW}}}
-	for _, tc := range []struct {
-		name string
-		err  error
-		want error
-	}{
-		{"writer", errOf(m.ClaimProvision(t.Context(), testKey, writer)), ErrVolumeBusy},
-		{"checkpoint", errOf(m.Checkpoint(t.Context(), sb.ID, Cred{Token: sb.Token}, "unretired", "")), ErrVolumeCapture},
-		{"hibernate", m.Hibernate(t.Context(), sb.ID, Cred{Token: sb.Token}), ErrVolumeCapture},
-		{"unregister", m.UnregisterVolume(t.Context(), "home"), ErrVolumeRegistrationConflict},
-		{"rebind", m.RegisterVolume(t.Context(), "home", types.VolumeRegistration{Path: writeVolumeImage(t, "different", "bytes")}), ErrVolumeRegistrationConflict},
-		{"alias", m.RegisterVolume(t.Context(), "same-file", spec), ErrVolumeRegistrationConflict},
-		{"reshape", errOf(m.SetVolumes(t.Context(), sb.ID, "acme", []types.Volume{{Name: "home", Mount: "/different"}})), ErrBadVolume},
-	} {
-		if !errors.Is(tc.err, tc.want) {
-			t.Errorf("%s with unretired reference = %v, want %v", tc.name, tc.err, tc.want)
-		}
-	}
-	if _, err = m.SetVolumes(t.Context(), sb.ID, "acme", nil); err == nil {
-		t.Fatal("empty retry acknowledged an unretired file")
-	}
-	unblock()
-	setVolumeTenants(m, "home", "other")
-	before := len(eng.volumeSpecs)
-	_, putErr := m.SetVolumes(t.Context(), sb.ID, "acme", want)
-	_, patchErr := m.PatchVolumes(t.Context(), sb.ID, "acme", types.VolumePatch{Add: want})
-	if !errors.Is(putErr, ErrVolumeUnavailable) || !errors.Is(patchErr, ErrVolumeUnavailable) || len(eng.volumeSpecs) != before {
-		t.Fatalf("recovery-only reference authorized a fresh attachment: put=%v patch=%v", putErr, patchErr)
-	}
-	setVolumeTenants(m, "home", "acme")
-	for range 2 {
-		if _, err = m.SetVolumes(t.Context(), sb.ID, "acme", want); err != nil {
-			t.Fatal(err)
-		}
-		if got := volumeHoldersOf(m, "home"); got != (volumeHolders{readers: 1}) {
-			t.Fatalf("own retry counts: %+v", got)
-		}
-	}
-	detachWithoutCommit(t, m, eng, sb.ID, "acme")()
-	if err = m.DeleteTenant(t.Context(), "acme"); err != nil {
-		t.Fatal(err)
-	}
-	_, putErr = m.SetVolumes(t.Context(), sb.ID, "", want)
-	_, patchErr = m.PatchVolumes(t.Context(), sb.ID, "", types.VolumePatch{Add: []types.Volume{{Name: "data"}}})
-	if !errors.Is(putErr, ErrTenantRemoved) || !errors.Is(patchErr, ErrTenantRemoved) || volumeHoldersOf(m, "home") != (volumeHolders{}) {
-		t.Fatalf("recovery-only retry bypassed tenant removal: put=%v patch=%v", putErr, patchErr)
-	}
-	if _, err = m.SetVolumes(t.Context(), sb.ID, "", nil); err != nil {
-		t.Fatalf("retirement after tenant removal: %v", err)
-	}
-	if err = claimAndRelease(t, m, writer.Volumes...); err != nil {
-		t.Fatalf("acknowledged detach kept the reader exclusion: %v", err)
-	}
-	if err = errors.Join(m.UnregisterVolume(t.Context(), "home"), m.RegisterVolume(t.Context(), "same-file", spec)); err != nil {
-		t.Fatalf("retired name or path stayed reserved: %v", err)
+	for _, volume := range []types.Volume{{Name: "home", Mount: "/home"}, {Name: "home", Mount: "/home", Mode: types.VolumeModeRW}, {Name: "home", AttachOnly: true}, {Name: "home", Mode: types.VolumeModeRW, AttachOnly: true}} {
+		t.Run(fmt.Sprintf("rw=%t/raw=%t", volume.RW(), volume.AttachOnly), func(t *testing.T) {
+			expectedHolds := volumeHolders{readers: 1}
+			if volume.RW() {
+				expectedHolds = volumeHolders{writers: 1}
+			}
+
+			eng := newFakeEngine()
+			m, sb := newTenantVolumeManager(t, eng, liveCatalog(t))
+			spec := types.VolumeRegistration{Path: writeVolumeImage(t, "home.img", "private"), Writable: true, Tenants: []string{"acme"}}
+			if err := m.RegisterVolume(t.Context(), "home", spec); err != nil {
+				t.Fatal(err)
+			}
+			want := []types.Volume{volume}
+			for _, caller := range []string{"", "acme"} {
+				if _, err := m.SetVolumes(t.Context(), sb.ID, caller, want); err != nil {
+					t.Fatal(err)
+				}
+			}
+			unblock := detachWithoutCommit(t, m, eng, sb.ID, "acme")
+			claims, err := newClaimStore(m.dataDir, false).load()
+			if err != nil || claims[sb.ID] == nil || !slices.Equal(claims[sb.ID].Volumes, want) {
+				t.Fatalf("old durable attachment missing: %+v, %v", claims, err)
+			}
+			view, err := m.GetVolumes(sb.ID, "")
+			if err != nil || len(view.States) != 1 || view.States[0].State != types.VolumeDetaching || !view.Converging {
+				t.Fatalf("unretired view: %+v, %v", view, err)
+			}
+			writer := ClaimOptions{Volumes: []types.Volume{{Name: "home", Mode: types.VolumeModeRW}}}
+			for _, tc := range []struct {
+				name string
+				err  error
+				want error
+			}{
+				{"writer", errOf(m.ClaimProvision(t.Context(), testKey, writer)), ErrVolumeBusy},
+				{"checkpoint", errOf(m.Checkpoint(t.Context(), sb.ID, Cred{Token: sb.Token}, "unretired", "")), ErrVolumeCapture},
+				{"hibernate", m.Hibernate(t.Context(), sb.ID, Cred{Token: sb.Token}), ErrVolumeCapture},
+				{"unregister", m.UnregisterVolume(t.Context(), "home"), ErrVolumeRegistrationConflict},
+				{"rebind", m.RegisterVolume(t.Context(), "home", types.VolumeRegistration{Path: writeVolumeImage(t, "different", "bytes")}), ErrVolumeRegistrationConflict},
+				{"alias", m.RegisterVolume(t.Context(), "same-file", spec), ErrVolumeRegistrationConflict},
+				{"reshape", errOf(m.SetVolumes(t.Context(), sb.ID, "acme", []types.Volume{{Name: "home", Mount: "/different"}})), ErrBadVolume},
+			} {
+				if !errors.Is(tc.err, tc.want) {
+					t.Errorf("%s with unretired reference = %v, want %v", tc.name, tc.err, tc.want)
+				}
+			}
+			if _, err = m.SetVolumes(t.Context(), sb.ID, "acme", nil); err == nil {
+				t.Fatal("empty retry acknowledged an unretired file")
+			}
+			unblock()
+			setVolumeTenants(m, "home", "other")
+			before := len(eng.volumeSpecs)
+			_, putErr := m.SetVolumes(t.Context(), sb.ID, "acme", want)
+			_, patchErr := m.PatchVolumes(t.Context(), sb.ID, "acme", types.VolumePatch{Add: want})
+			if !errors.Is(putErr, ErrVolumeUnavailable) || !errors.Is(patchErr, ErrVolumeUnavailable) || len(eng.volumeSpecs) != before {
+				t.Fatalf("recovery-only reference authorized a fresh attachment: put=%v patch=%v", putErr, patchErr)
+			}
+			setVolumeTenants(m, "home", "acme")
+			for range 2 {
+				if _, err = m.SetVolumes(t.Context(), sb.ID, "acme", want); err != nil {
+					t.Fatal(err)
+				}
+				if got := volumeHoldersOf(m, "home"); got != expectedHolds {
+					t.Fatalf("own retry counts: %+v", got)
+				}
+			}
+			detachWithoutCommit(t, m, eng, sb.ID, "acme")()
+			if err = m.DeleteTenant(t.Context(), "acme"); err != nil {
+				t.Fatal(err)
+			}
+			_, putErr = m.SetVolumes(t.Context(), sb.ID, "", want)
+			_, patchErr = m.PatchVolumes(t.Context(), sb.ID, "", types.VolumePatch{Add: []types.Volume{{Name: "data"}}})
+			if !errors.Is(putErr, ErrTenantRemoved) || !errors.Is(patchErr, ErrTenantRemoved) || volumeHoldersOf(m, "home") != (volumeHolders{}) {
+				t.Fatalf("recovery-only retry bypassed tenant removal: put=%v patch=%v", putErr, patchErr)
+			}
+			if _, err = m.SetVolumes(t.Context(), sb.ID, "", nil); err != nil {
+				t.Fatalf("retirement after tenant removal: %v", err)
+			}
+			if err = claimAndRelease(t, m, writer.Volumes...); err != nil {
+				t.Fatalf("acknowledged detach kept the reader exclusion: %v", err)
+			}
+			if err = errors.Join(m.UnregisterVolume(t.Context(), "home"), m.RegisterVolume(t.Context(), "same-file", spec)); err != nil {
+				t.Fatalf("retired name or path stayed reserved: %v", err)
+			}
+		})
 	}
 }
 

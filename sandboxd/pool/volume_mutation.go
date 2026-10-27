@@ -41,13 +41,13 @@ func (m *Manager) SetVolumes(ctx context.Context, id, tenant string, want []type
 	return m.changeVolumes(ctx, id, tenant, func([]types.Volume) ([]types.Volume, error) { return slices.Clone(want), nil })
 }
 
-// PatchVolumes adds and removes a running claim's read-only mounted volumes by name.
+// PatchVolumes adds and removes a running claim's volumes by name.
 func (m *Manager) PatchVolumes(ctx context.Context, id, tenant string, patch types.VolumePatch) (types.SandboxVolumesResponse, error) {
 	return m.changeVolumes(ctx, id, tenant, func(current []types.Volume) ([]types.Volume, error) {
 		if err := validateDetachNames(patch.Remove); err != nil {
 			return nil, err
 		}
-		additions, err := normalizeLiveVolumes(patch.Add, current)
+		additions, err := normalizeLiveVolumes(patch.Add)
 		if err != nil {
 			return nil, err
 		}
@@ -93,7 +93,7 @@ func (m *Manager) changeVolumes(ctx context.Context, id, tenant string, change v
 	if err != nil {
 		return view, err
 	}
-	target, err = normalizeLiveVolumes(target, slices.Concat(held, recovery))
+	target, err = normalizeLiveVolumes(target)
 	if err != nil {
 		return view, err
 	}
@@ -110,7 +110,13 @@ func (m *Manager) changeVolumes(ctx context.Context, id, tenant string, change v
 	if err != nil {
 		return view, err
 	}
-	if err = m.checkVolumeRun(ctx, sb, run); err != nil {
+	m.mu.Lock()
+	err = m.checkVolumeRunLocked(ctx, sb, run)
+	if err == nil && slices.ContainsFunc(additions, types.Volume.RW) {
+		err = m.liveWriterErrorLocked(sb)
+	}
+	m.mu.Unlock()
+	if err != nil {
 		return view, err
 	}
 	sb.Touch()
@@ -259,25 +265,34 @@ func (m *Manager) prepareVolumeTarget(ctx context.Context, sb *types.Sandbox, ru
 }
 
 func (m *Manager) stageVolumeTarget(ctx context.Context, sb *types.Sandbox, run *volumeRun, target, additions []types.Volume, resolved []resolvedVolume) (claimSnapshot, bool, error) {
+	if err := func() error {
+		sb.Transition.Lock()
+		defer sb.Transition.Unlock()
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		if err := m.checkVolumeRunLocked(ctx, sb, run); err != nil {
+			return err
+		}
+		if sb.OnExpire == types.ExpireArchive && len(target) > 0 {
+			return ErrVolumeCapture
+		}
+		if slices.ContainsFunc(additions, types.Volume.RW) {
+			if err := m.liveWriterErrorLocked(sb); err != nil {
+				return err
+			}
+		}
+		if err := m.checkResolved(resolved, sb.ID); err != nil {
+			return err
+		}
+		m.adoptVolumes(additions)
+		run.holds = append(run.holds, additions...)
+		return nil
+	}(); err != nil {
+		return claimSnapshot{}, false, err
+	}
+	cleanErr := m.confirmVolumesClean(resolved)
 	sb.Transition.Lock()
 	defer sb.Transition.Unlock()
-	m.mu.Lock()
-	if err := m.checkVolumeRunLocked(ctx, sb, run); err != nil {
-		m.mu.Unlock()
-		return claimSnapshot{}, false, err
-	}
-	if sb.OnExpire == types.ExpireArchive && len(target) > 0 {
-		m.mu.Unlock()
-		return claimSnapshot{}, false, ErrVolumeCapture
-	}
-	if err := m.checkResolved(resolved, sb.ID); err != nil {
-		m.mu.Unlock()
-		return claimSnapshot{}, false, err
-	}
-	m.adoptVolumes(additions)
-	run.holds = append(run.holds, additions...)
-	m.mu.Unlock()
-	cleanErr := m.confirmVolumesClean(resolved)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if err := m.checkVolumeRunLocked(ctx, sb, run); err != nil {
@@ -299,14 +314,40 @@ func (m *Manager) stageVolumeTarget(ctx context.Context, sb *types.Sandbox, run 
 	return m.store.set(sb), true, nil
 }
 
+func (m *Manager) liveWriterErrorLocked(sb *types.Sandbox) error {
+	if m.view.Load().poolReplicate[sb.PolicyKey()] > 0 {
+		return ErrReplicatingPool
+	}
+	if m.archives == nil && (sb.HasReplica() || sb.ArchivePending != "" || sb.ArchiveCk != "") {
+		return ErrReplicaStranded
+	}
+	if sb.HasReplica() || sb.ArchivePending != "" || sb.ArchiveCk != "" || m.store.hasCheckpointReferences(sb.ID) {
+		return ErrReplicaPresent
+	}
+	return nil
+}
+
 func (m *Manager) detachVolumeRun(ctx context.Context, sb *types.Sandbox, run *volumeRun, v types.Volume) error {
-	if err := m.checkVolumeRun(ctx, sb, run); err != nil {
+	m.mu.Lock()
+	err := m.checkVolumeRunLocked(ctx, sb, run)
+	entry := m.catalog.entries[v.Name]
+	m.mu.Unlock()
+	if err != nil {
 		return err
 	}
-	if err := m.eng.DetachVolume(ctx, sb.VMName, sb.VsockSocket, v.Name, v.Mount); err != nil {
+	cleanRW, err := m.eng.DetachVolume(ctx, sb.VMName, sb.VsockSocket, v.Name, v.Mount)
+	if err != nil {
 		return fmt.Errorf("detach volume %q: %w", v.Name, err)
 	}
-	return m.checkVolumeRun(ctx, sb, run)
+	if err = m.checkVolumeRun(ctx, sb, run); err != nil {
+		return err
+	}
+	if needsUnmount(v) && cleanRW && entry != nil {
+		if err = clearVolumeDirty(entry.disk.Path); err != nil {
+			return fmt.Errorf("clear dirty marker for volume %q: %w", v.Name, err)
+		}
+	}
+	return nil
 }
 
 func (m *Manager) commitVolumeApplied(ctx context.Context, sb *types.Sandbox, run *volumeRun, v types.Volume, attached bool) error {
@@ -423,30 +464,9 @@ func (m *Manager) clearVolumeError(sb *types.Sandbox, run *volumeRun, name strin
 	}
 }
 
-func normalizeLiveVolumes(volumes, held []types.Volume) ([]types.Volume, error) {
-	if len(volumes) > types.MaxClaimVolumes {
-		return nil, fmt.Errorf("%w: too many volumes", ErrBadVolume)
-	}
-	out := make([]types.Volume, 0, len(volumes))
-	for _, v := range volumes {
-		attachOnly := v.AttachOnly
-		if i := volumeIndex(held, v.Name); i >= 0 && held[i].Mount == "" && v.Mount == "" {
-			attachOnly = true
-		}
-		normalized, err := types.ValidateVolumes([]types.Volume{v}, attachOnly)
-		if err != nil {
-			return nil, fmt.Errorf("%w: %w", ErrBadVolume, err)
-		}
-		if volumeIndex(out, v.Name) >= 0 {
-			return nil, fmt.Errorf("%w: duplicate volume %q", ErrBadVolume, v.Name)
-		}
-		if attachOnly {
-			normalized[0].AttachOnly = false
-		}
-		out = append(out, normalized[0])
-	}
-	mounted := slices.DeleteFunc(slices.Clone(out), func(v types.Volume) bool { return v.Mount == "" })
-	if _, err := types.ValidateVolumes(mounted, false); err != nil {
+func normalizeLiveVolumes(volumes []types.Volume) ([]types.Volume, error) {
+	out, err := types.ValidateVolumes(volumes)
+	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrBadVolume, err)
 	}
 	return out, nil
@@ -458,17 +478,9 @@ func validateLiveTarget(held, target []types.Volume) error {
 		if i >= 0 && target[i] != v {
 			return fmt.Errorf("%w: remove volume %q before changing its mount or mode", ErrBadVolume, v.Name)
 		}
-		if immutableVolume(v) && i < 0 {
-			return fmt.Errorf("%w: writable and attach-only volumes cannot change live", ErrBadVolume)
-		}
-	}
-	if slices.ContainsFunc(volumeDifference(target, held), immutableVolume) {
-		return fmt.Errorf("%w: live additions require read-only mounts", ErrBadVolume)
 	}
 	return nil
 }
-
-func immutableVolume(v types.Volume) bool { return v.RW() || v.AttachOnly || v.Mount == "" }
 
 func volumeIndex(volumes []types.Volume, name string) int {
 	return slices.IndexFunc(volumes, func(v types.Volume) bool { return v.Name == name })
