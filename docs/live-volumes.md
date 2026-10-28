@@ -13,8 +13,8 @@ A configured node root token can
 [register backing paths](sandboxd-api.md#put-v1volumesname) without editing
 static config. Registration persists only node-local catalog metadata and does
 not manage disk files. Runtime `tenants` lists follow the
-[access-list rule](sandboxd-api.md#volume-access-lists). Live changes remain
-limited to mounted read-only entries.
+[access-list rule](sandboxd-api.md#volume-access-lists). The API also supports
+[writable and attach-only entries](sandboxd-api.md#put-v1sandboxesidvolumes).
 
 Pause application reads before replacement. Close files, mmap mappings, cwd,
 and bind mount references on the old disk. Replacement unmounts the old disk
@@ -65,9 +65,10 @@ with client.new("rt:24.04", ttl_seconds=900) as sb:
 
 A successful run reads `v1`, then `v2`, and preserves every identity assertion.
 The repeated full target verifies that a settled mount can be retained.
-This example starts without other volumes. If your sandbox has writable or
-attach-only volumes, retain them in a full PUT or use PATCH to replace only
-the dataset names. `None`, a nil Go slice, and a missing `volumes` field do not
+This example starts without other volumes. Retain any volumes you intend to
+keep in a full PUT, or use PATCH to replace only the dataset names. All mounted
+and attach-only entries support live removal in either mode.
+`None`, a nil Go slice, and a missing `volumes` field do not
 mean an empty target.
 
 Go uses the same owning handle and client API token.
